@@ -1,0 +1,25 @@
+# Generated datasets
+verified_dataset/
+verified_dataset_backup/
+out_sam3/
+review_priority.csv
+
+# Local database
+verification.db
+verification.db-shm
+verification.db-wal
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+# Camera footage and datasets stay off GitHub
+frames/
+data/
+sam3_labels/
+verified_*/
+sam3/
+run_sam3_backup.py

@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CMR Frame Review</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23a71e31'/%3E%3Cpath d='M14 27 86 73M14 73 86 27' stroke='%23fff' stroke-width='9'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+
+<!-- The CMR mark, drawn once and reused. Wings take the text colour so they read in both themes. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <mask id="logo-wing-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="2576" height="960">
+      <rect width="2576" height="960" fill="#fff"/>
+      <circle cx="1288" cy="480" r="528"/>
+      <circle cx="660" cy="349" r="65"/><circle cx="660" cy="609" r="65"/>
+      <circle cx="1916" cy="349" r="65"/><circle cx="1916" cy="609" r="65"/>
+    </mask>
+    <mask id="logo-disc-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="2576" height="960">
+      <rect width="2576" height="960" fill="#fff"/>
+      <path stroke="#000" stroke-width="49" d="M500 -161 2076 829M500 -15 2076 975M500 131 2076 1121M500 1121 2076 131M500 975 2076 -15M500 829 2076 -161"/>
+    </mask>
+    <path id="logo-wing" d="M0 113H1288V325H200Q116 325 76 252ZM144 373H1288V585H344Q260 585 220 512ZM288 633H1288V845H488Q404 845 364 772ZM640 113H1288V845H640Z"/>
+    <!-- Icons: 24×24, 2px round strokes. Used as <svg class="i"><use href="#i-right"/></svg> -->
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="logo" viewBox="0 0 2576 960">
+      <g fill="currentColor" mask="url(#logo-wing-cut)"><use href="#logo-wing"/><use href="#logo-wing" transform="matrix(-1 0 0 1 2576 0)"/></g>
+      <g fill="currentColor"><circle cx="660" cy="349" r="26"/><circle cx="660" cy="609" r="26"/><circle cx="1916" cy="349" r="26"/><circle cx="1916" cy="609" r="26"/></g>
+      <circle cx="1288" cy="480" r="480" style="fill:var(--logo-disc)" mask="url(#logo-disc-cut)"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="login" hidden>
+  <form id="login-form">
+    <svg class="logo" viewBox="0 0 2576 960" role="img" aria-label="CMR"><use href="#logo"/></svg>
+    <h1>Frame Review</h1>
+    <p>Sign in with your CVAT account.</p>
+    <input id="username" placeholder="Username" autocomplete="username" required autofocus>
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+    <button class="cta">Sign in</button>
+    <p id="login-error" hidden></p>
+  </form>
+  <footer class="site-footer">
+    <svg class="logo" viewBox="0 0 2576 960" aria-hidden="true"><use href="#logo"/></svg>
+    <span class="wordmark">Carnegie Mellon Racing</span>
+  </footer>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <span class="brand" id="brand" role="button" tabindex="0" title="Home"><svg class="logo" viewBox="0 0 2576 960" role="img" aria-label="CMR"><use href="#logo"/></svg><span>Frame Review</span></span>
+    <select id="task" aria-label="Task" data-show="frames gallery cones"></select>
+    <nav class="seg" id="mode" aria-label="Screen">
+      <button data-mode="home">Home</button>
+      <button data-mode="frames">Approve frames</button>
+      <button data-mode="gallery">Gallery</button>
+      <button data-mode="cones">Sort cones</button>
+    </nav>
+    <span class="spacer"></span>
+    <span id="sync" title="Every change goes straight to CVAT">Saved to CVAT</span>
+    <button id="assign" class="ghost" title="Choose who reviews which frames">Assign</button>
+    <button id="theme" class="ghost" title="Light or dark theme" aria-label="Switch theme"></button>
+    <button id="help" class="ghost" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><kbd>?</kbd></button>
+    <span id="who" class="muted"></span>
+    <button id="logout" class="ghost">Sign out</button>
+  </header>
+
+  <div id="progress" data-show="frames gallery cones" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100">
+    <nav id="steps" aria-label="Your work" hidden></nav>
+    <div id="progress-text"><span id="progress-title"></span><span id="progress-legend"></span></div>
+    <div id="bar"></div>
+  </div>
+
+  <div class="toolbar" data-show="frames gallery cones">
+    <select id="scope" aria-label="Whose frames" hidden></select>
+    <nav class="tabs" id="filter" aria-label="Show" data-show="frames gallery">
+      <button data-filter="todo">To review <span class="count"></span></button>
+      <button data-filter="needs_fix">Needs fix <span class="count"></span></button>
+      <button data-filter="verified">Approved <span class="count"></span></button>
+      <button data-filter="all">All <span class="count"></span></button>
+    </nav>
+    <select id="sort" aria-label="Class to sort" data-show="cones"></select>
+    <button id="auto-sort" class="ghost" data-show="cones" hidden
+      title="Gives an unknown cone the colour it has in every frame around it (at least 3 frames, none disagreeing). You can undo it."></button>
+    <span id="fixing" data-show="cones"><b id="fixing-text"></b> <button id="fix-done" class="ghost">Back to frame</button></span>
+    <button id="back-gallery" class="ghost" data-show="frames"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg> Gallery</button>
+    <label class="toggle" data-show="frames cones" title="A change also applies to the same cone in the frames just before and after, as the video moves">
+      <input type="checkbox" id="follow"> Same cone in nearby frames</label>
+    <span class="spacer"></span>
+    <span id="position" class="muted"></span>
+    <input id="jump" type="number" min="0" placeholder="Frame #" aria-label="Go to frame" data-show="frames">
+    <select id="gallery-sort" aria-label="Sort gallery" data-show="gallery">
+      <option value="order">Frame order</option>
+      <option value="most">Most boxes first</option>
+      <option value="fewest">Fewest boxes first</option>
+    </select>
+    <input id="gallery-size" type="range" min="140" max="520" step="20" value="240" aria-label="Thumbnail size" title="Thumbnail size" data-show="gallery">
+  </div>
+
+  <section id="home" data-show="home">
+    <div class="home-wrap">
+      <header class="hero">
+        <img src="/web/img/car.jpg" srcset="/web/img/car-small.jpg 1200w, /web/img/car.jpg 2400w" sizes="(max-width: 1200px) 100vw, 1120px"
+          alt="Carnegie Mellon Racing's car 46 driving between orange cones">
+        <div class="hero-text">
+          <h1 id="home-next-title">Loading your work…</h1>
+          <p id="home-next-where"></p>
+          <button id="home-continue" class="cta" hidden></button>
+        </div>
+      </header>
+
+      <section class="home-block">
+        <h2 id="home-total">Counting frames…</h2>
+        <p class="lede" id="home-badge"></p>
+        <div id="home-strip"></div>
+        <div class="legend" id="home-legend"></div>
+      </section>
+
+      <section class="home-block">
+        <h2>Pipeline <span class="hint">Click a stage to jump in.</span></h2>
+        <div id="flow" class="steps"></div>
+      </section>
+
+      <section class="home-block" id="home-mine-block">
+        <h2>Your assignments</h2>
+        <div id="home-mine" class="mine"></div>
+      </section>
+
+      <section class="home-block">
+        <h2>Tasks <span class="hint">Hover a timeline to see the frame, click to open it.</span>
+          <button id="new-task" class="soft sm push"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg> New task</button></h2>
+        <div id="home-tasks" class="task-list"></div>
+      </section>
+    </div>
+    <footer class="site-footer">
+      <svg class="logo" viewBox="0 0 2576 960" aria-hidden="true"><use href="#logo"/></svg>
+      <span class="wordmark">Carnegie Mellon Racing</span>
+    </footer>
+  </section>
+
+  <main data-show="frames gallery cones">
+    <div id="gallery" data-show="gallery"></div>
+    <div id="stage" data-show="frames">
+      <div id="view">
+        <img id="image" alt="Camera frame" draggable="false">
+        <svg id="boxes" preserveAspectRatio="none"></svg>
+      </div>
+      <div id="loading" class="chip" hidden>Loading…</div>
+      <div id="zoom-ctl" role="group" aria-label="Zoom">
+        <button id="zoom-out" title="Zoom out (−)" aria-label="Zoom out"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+        <span id="zoom-pct">100%</span>
+        <button id="zoom-in" title="Zoom in (+)" aria-label="Zoom in"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+        <button id="zoom-fit" title="Fit the whole frame (0)">Fit</button>
+      </div>
+      <div id="edit-bar" hidden></div>
+      <div id="fix-bar" hidden></div>
+    </div>
+    <div id="cone-stage" data-show="cones">
+      <canvas id="crop" aria-label="Close-up of the cone"></canvas>
+      <div id="cone-question" class="chip">What colour is this cone?</div>
+      <div id="zoom-level" class="chip"></div>
+      <div id="cone-empty" hidden></div>
+    </div>
+    <aside data-show="frames cones">
+      <div id="cone-side" data-show="cones">
+        <section>
+          <h2>Where in the picture</h2>
+          <canvas id="thumb" aria-label="Whole frame with the cone marked"></canvas>
+          <div id="cone-frame" class="muted small"></div>
+        </section>
+        <section>
+          <h2>Labelled now as</h2>
+          <div id="cone-class"></div>
+          <div id="cone-suggest" class="small" hidden></div>
+        </section>
+      </div>
+      <div id="frame-side" data-show="frames">
+        <section>
+          <div id="name"></div>
+          <span id="status" class="status"></span>
+          <div id="reviewer" class="muted small"></div>
+        </section>
+        <section>
+          <h2>Boxes on this frame</h2>
+          <div id="counts"></div>
+        </section>
+        <section id="warn" hidden></section>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="cone-keys" class="actions" data-show="cones">
+    <div class="group">
+      <span id="label-keys"></span>
+      <button id="flag" class="danger big">Not a cone <kbd>X</kbd></button>
+    </div>
+    <div class="group">
+      <button id="cone-prev" aria-label="Previous cone"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg></button>
+      <button id="skip">Skip <kbd>S</kbd></button>
+      <button id="cone-undo">Undo <kbd>U</kbd></button>
+      <button id="wide">Full frame <kbd>Z</kbd></button>
+      <button id="cone-edit">Open in CVAT <kbd>E</kbd></button>
+      <button id="cone-next" aria-label="Next cone"><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
+    </div>
+  </footer>
+
+  <footer id="frame-keys" class="actions" data-show="frames">
+    <div class="group">
+      <button id="reset">Undo <kbd>U</kbd></button>
+      <button id="edit">Edit in CVAT <kbd>E</kbd></button>
+      <button id="toggle">Hide boxes <kbd>T</kbd></button>
+      <button id="draw">Add box <kbd>B</kbd></button>
+    </div>
+    <div class="group">
+      <button id="prev" class="big" aria-label="Previous frame"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg></button>
+      <button id="fix" class="danger big">Needs fix <kbd>F</kbd></button>
+      <button id="approve" class="primary big">Approve <kbd>A</kbd></button>
+      <button id="next" class="big" aria-label="Next frame"><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
+    </div>
+    <div class="tip">Approve only if every box is right and no cone is missing. Click a box to change or delete it; B or Shift-drag draws a new one.</div>
+  </footer>
+</div>
+
+<dialog id="fix-dialog">
+  <form id="fix-form">
+    <h3>What needs fixing?</h3>
+    <p>This opens an issue on the frame in CVAT. Then click any cone on the frame to change its colour or delete it, or draw a missing one.</p>
+    <input id="fix-note" maxlength="500" placeholder="e.g. cone on the left has no box (optional)" autocomplete="off">
+    <div class="row">
+      <button type="button" id="fix-cancel" class="ghost">Cancel</button>
+      <button type="button" id="fix-later">Just mark it</button>
+      <button class="danger">Fix it now</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="assign-dialog">
+  <form id="assign-form">
+    <h3>Assign frames</h3>
+    <p>Tick who reviews this task, or add someone new: the frames are split into even, back-to-back ranges, which you can adjust.
+      Each reviewer first sorts the unknown cones in their frames, then reviews those frames.
+      CVAT jobs that fall entirely in one person's frames are assigned to them in CVAT too.</p>
+    <div id="assign-users" class="checks"></div>
+    <div class="add-person">
+      <input id="person-name" placeholder="Add someone: name or CVAT username" autocomplete="off">
+      <button type="button" id="person-add">Add</button>
+    </div>
+    <details class="add-account">
+      <summary>They don't have a CVAT account? Create one</summary>
+      <p>Uses CVAT's own sign-up. Send them the password; they can change it in CVAT.</p>
+      <div class="add-person">
+        <input id="person-email" type="email" placeholder="Email" autocomplete="off">
+        <input id="person-password" type="text" placeholder="Starting password" autocomplete="off">
+      </div>
+    </details>
+    <table id="assign-table">
+      <thead><tr><th>Reviewer</th><th>First frame</th><th>Last frame</th><th></th></tr></thead>
+      <tbody id="assign-rows"></tbody>
+    </table>
+    <p id="assign-empty" class="small">Nobody is assigned: everyone sees all frames.</p>
+    <p id="assign-error" class="small" style="color:var(--bad)" hidden></p>
+    <div class="row">
+      <button type="button" id="assign-cancel" class="ghost">Cancel</button>
+      <button class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="new-task-dialog">
+  <form id="new-task-form">
+    <h3>New task</h3>
+    <p>Upload the pictures or the video to review. The task is created in CVAT, the same as CVAT's own "Create a new task".</p>
+    <label class="field">Name <input name="name" required placeholder="e.g. Night run, 8 Nov" autocomplete="off"></label>
+    <label class="field">Project <select name="project" id="new-task-project"><option value="">No project (uses the cone labels)</option></select></label>
+    <label class="field">Pictures or a video <input type="file" name="files" id="new-task-files" multiple required accept="image/*,video/*"></label>
+    <label class="field">Boxes <span class="hint">optional: SAM3's boxes.csv or .json files, a CVAT .xml, or COCO .json</span>
+      <input type="file" name="boxes" id="new-task-boxes" multiple accept=".csv,.json,.xml"></label>
+    <p id="new-task-match" class="small" hidden></p>
+    <label class="field">Frames per job <input name="segment_size" type="number" min="1" placeholder="All in one job"></label>
+    <label class="toggle"><input type="checkbox" name="prepare" checked>
+      Prepare every frame now: slower to create, much faster to review</label>
+    <div id="new-task-progress" hidden><div class="track"><i></i></div><span></span></div>
+    <p id="new-task-error" class="small" style="color:var(--bad)" hidden></p>
+    <div class="row">
+      <button type="button" id="new-task-cancel" class="ghost">Cancel</button>
+      <button class="cta" id="new-task-submit">Create task</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="export-dialog">
+  <h3>Export approved frames</h3>
+  <p>Downloads a zip of every approved frame at full quality, with its boxes as YOLO labels:
+    <b>images/</b>, <b>labels/</b> and <b>data.yaml</b>. Frames whose boxes changed after approval are left out.</p>
+  <div id="export-list" class="export-list"></div>
+  <details class="export-cli">
+    <summary>Or export from the terminal</summary>
+    <p>Run in the project folder. It writes to <b>verified_dataset/</b>; for a video task add <b>VIDEO_PATH=</b><i>path/to/video</i> first.</p>
+    <div id="export-commands" style="display:grid;gap:8px"></div>
+  </details>
+  <div class="row"><button id="export-close">Close</button></div>
+</dialog>
+
+<dialog id="help-dialog">
+  <h3>Keyboard shortcuts</h3>
+  <h4>Approve frames</h4>
+  <table>
+    <tr><td><kbd>A</kbd></td><td>Approve and go to the next frame</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Needs fix: opens an issue in CVAT, then lets you fix the frame's cones</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Back to the gallery (if you came from it)</td></tr>
+    <tr><td><kbd>U</kbd></td><td>Undo the decision on this frame</td></tr>
+    <tr><td><kbd>E</kbd></td><td>Edit this frame in CVAT</td></tr>
+    <tr><td><kbd>T</kbd></td><td>Show or hide boxes</td></tr>
+    <tr><td>Click a box</td><td>Select it, then <kbd>1</kbd>–<kbd>9</kbd> to change its class or <kbd>X</kbd> to delete it</td></tr>
+    <tr><td><kbd>B</kbd></td><td>Draw a new box (or Shift-drag), then pick its class</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next frame. Scroll to zoom, drag to pan, double-click to fit.</td></tr>
+    <tr><td><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></td><td>Zoom in, zoom out, fit the whole frame (also the buttons top right)</td></tr>
+  </table>
+  <h4>Sort cones</h4>
+  <table>
+    <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>Set the cone's colour (saved to CVAT)</td></tr>
+    <tr><td><kbd>X</kbd></td><td>Not a cone: deletes the box in CVAT</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>Accept the suggested colour (from the same cone in nearby frames)</td></tr>
+    <tr><td><kbd>S</kbd></td><td>Skip, not sure</td></tr>
+    <tr><td><kbd>U</kbd></td><td>Undo the last change</td></tr>
+    <tr><td><kbd>Z</kbd></td><td>Switch between close-up and the full frame</td></tr>
+    <tr><td>Mouse</td><td>Scroll to zoom, drag to pan, double-click for the close-up again</td></tr>
+    <tr><td><kbd>Home</kbd></td><td>Back to the first cone left</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>When fixing a frame: back to that frame</td></tr>
+  </table>
+  <h4>Gallery</h4>
+  <table>
+    <tr><td>Click</td><td>Open the frame to review it up close</td></tr>
+    <tr><td>Hover</td><td>Approve or mark Needs fix straight from the thumbnail</td></tr>
+  </table>
+  <p style="margin-top:14px">Edited boxes in CVAT? Save there and come back. This page reloads them.</p>
+  <div class="row"><button id="help-close">Close</button></div>
+</dialog>
+
+<div id="toast" role="status" hidden></div>
+<div id="ambient" aria-hidden="true"></div>
+<div id="busy" aria-live="polite"><i></i><span id="busy-text"></span></div>
+
+<!-- The page's code, one file per part. Each file starts with what it does. -->
+<script src="/web/js/basics.js"></script>
+<script src="/web/js/home.js"></script>
+<script src="/web/js/frames.js"></script>
+<script src="/web/js/gallery.js"></script>
+<script src="/web/js/cones.js"></script>
+<script src="/web/js/dialogs.js"></script>
+<script src="/web/js/main.js"></script>
+</body>
+</html>
