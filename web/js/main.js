@@ -1,8 +1,4 @@
-// main.js: starts the page and connects buttons and keys to what they do.
-//
-//   setMode("home" | "frames" | "gallery" | "cones")  switches screens
-//   loadTask()                                        gets the open task from the server
-// Loaded last, so everything from the other files exists by now.
+// main.js: starts the page and wires up buttons and keys. Loaded last.
 
 // ------------------------------------------------------------- loading
 
@@ -52,8 +48,7 @@ async function loadTask(fresh, keepId) {
   show();
 }
 
-// The faint blurred picture behind the page: the frame you're on, or the middle of the task elsewhere.
-// It waits half a second, so flipping quickly through frames doesn't load every one.
+// Blurred background frame, delayed so fast paging doesn't load every one
 let ambientUrl = "";
 function setAmbient() {
   const task = data?.task.id ?? overview[0]?.id;
@@ -214,8 +209,7 @@ window.addEventListener("keydown", (e) => {
   if (action) { e.preventDefault(); action(); }
 });
 
-// Coming back from the CVAT tab: pick up any box edits made there. Not more than every 20 seconds,
-// because a big task's boxes take a while to download.
+// Back from CVAT: reload boxes, at most every 20 s
 window.addEventListener("focus", () => {
   if (mode === "home" && !$("app").hidden) return Date.now() - homeLoadedAt > 30000 && renderHome();
   if (data && !inFlight && Date.now() - taskLoadedAt > 20000) loadTask(false).catch(() => {});

@@ -1,30 +1,6 @@
-"""
-run_sam3.py
+"""Run SAM3 with cone-colour text prompts on every image in a folder.
 
-Runs SAM3 (Meta, Nov 2025) on every image in a folder using text "concept"
-prompts for cone colors, and saves annotated copies with the segmentation
-masks overlaid + confidence scores.
-
-SAM3 is very new - the exact API below matches the official repo's README
-as of when this was written. If a call signature has changed, check
-https://github.com/facebookresearch/sam3 directly (their example notebooks
-are the source of truth, more so than this script).
-
---- On Apple Silicon Macs ---
-SAM3's official code hard-requires `triton`, which has no macOS build (this
-is a known, common issue - see facebookresearch/sam3 issues #179 and #154,
-and the HF discussion "Cannot run on Apple Silicon (M4) due to Triton").
-This script uses the community `sam3-mac` compatibility shim instead of
-importing sam3 directly, which patches around that at runtime and picks
-MPS/CPU automatically. Its one limitation is that video tracking doesn't
-work - that's fine here, we're only doing per-frame text-prompted image
-segmentation, not tracking across frames.
-
-    pip install sam3-mac
-
-If you're on Linux with an NVIDIA GPU instead, `triton` installs fine
-normally and you likely don't need sam3-mac at all - swap the import block
-below back to plain `from sam3.model_builder import build_sam3_image_model`.
+Uses the sam3-mac shim so it runs on Apple Silicon (pip install sam3-mac).
 
 Usage:
     python run_sam3.py --frames frames/ --out out_sam3/
@@ -40,8 +16,7 @@ from PIL import Image, ImageDraw
 import sam3_mac
 sam3_mac.install()  # auto-picks mps/cpu, patches around the triton import
 
-# One concept at a time keeps this simple and matches the README example.
-# Loop over your actual cone color classes here.
+# One prompt per cone colour
 CONCEPTS = ["blue cone", "yellow cone", "orange cone"]
 
 MASK_COLORS = {
@@ -52,8 +27,7 @@ MASK_COLORS = {
 
 
 def to_cpu_numpy(x):
-    """Handles values whether they're torch tensors (possibly still on the
-    mps/cuda device from inference) or already plain numpy/python values."""
+    """Convert a tensor or plain value to numpy/python."""
     if hasattr(x, "detach"):
         x = x.detach()
     if hasattr(x, "cpu"):
@@ -70,9 +44,7 @@ def overlay_masks(image: Image.Image, masks, boxes, scores, concept: str):
     boxes = [to_cpu_numpy(b) for b in boxes]
     scores = [float(to_cpu_numpy(s)) for s in scores]
 
-    # Pass 1: composite every mask's translucent fill onto the image.
-    # (each alpha_composite call returns a NEW image, so img is reassigned
-    # each time - that's fine here since nothing else is bound to the old one)
+    # Pass 1: draw every mask's translucent fill
     img = image.convert("RGBA")
     for mask in masks:
         mask_np = mask.astype(bool)
@@ -82,11 +54,7 @@ def overlay_masks(image: Image.Image, masks, boxes, scores, concept: str):
         colored[mask_np] = (*color, 110)  # semi-transparent fill
         img = Image.alpha_composite(img, Image.fromarray(colored, "RGBA"))
 
-    # Pass 2: NOW create the draw context, bound to the final composited
-    # image, and draw all boxes/labels directly onto it in place. Doing this
-    # in a separate pass (after all the reassignment above is done) is what
-    # was missing before - draw.rectangle/draw.text mutate img in place, so
-    # this only works correctly if img isn't being reassigned anymore.
+    # Pass 2: draw boxes and labels on the final image
     draw = ImageDraw.Draw(img)
     for box, score in zip(boxes, scores):
         x0, y0, x1, y1 = box
@@ -126,9 +94,7 @@ def main(frames_dir: str, out_dir: str, concepts: list, confidence_threshold: fl
                 })
             
             total += len(masks)
-            # print every raw score, even ones we'd otherwise ignore, so you
-            # can see whether SAM3 is finding low-confidence candidates that
-            # the threshold is just filtering out, vs finding nothing at all
+            # Print every raw score, even below the threshold
             score_list = [round(float(to_cpu_numpy(s)), 3) for s in scores]
             print(f"    '{concept}': {len(masks)} matches, scores={score_list}")
             if len(masks) > 0:

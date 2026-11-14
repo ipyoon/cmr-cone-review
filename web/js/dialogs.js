@@ -1,7 +1,4 @@
-// dialogs.js: the pop-up windows.
-//   Assign    who reviews which frames (anyone: add a name, or create their CVAT account)
-//   New task  upload pictures or a video and create the task in CVAT
-//   Export    download the approved frames as a zip
+// dialogs.js: Assign, New task and Export dialogs.
 
 let users = null;  // names to choose from in the Assign dialog: CVAT's users, plus anyone added
 async function openAssign() {
@@ -28,7 +25,7 @@ function drawPeople(chosen) {
     el("input", { type: "checkbox", value: u, checked: chosen.has(u), onchange: () => fillAssign(splitFrames(checkedUsers())) }), u)));
 }
 
-// "Add": put a new name on the list, ticked. With an email and password, create their CVAT account first.
+// Add a name; with email and password, create their CVAT account first
 $("person-add").onclick = async () => {
   const name = $("person-name").value.trim(), email = $("person-email").value.trim(), password = $("person-password").value;
   if (!name) return $("person-name").focus();
@@ -51,8 +48,7 @@ $("person-add").onclick = async () => {
 };
 $("person-name").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("person-add").click(); } };
 
-// Even, back-to-back ranges; cut at CVAT job boundaries when there are enough jobs,
-// so each job can be assigned to one person in CVAT
+// Split frames into even ranges, aligned to CVAT jobs when possible
 function splitFrames(people) {
   const n = data.frames.length;
   const cuts = data.jobs.length >= people.length && data.jobs.length > 1 ? data.jobs.map((j) => j.start).filter((s) => s > 0) : null;
@@ -105,8 +101,7 @@ $("assign-form").onsubmit = async (e) => {
   }
 };
 
-// The zip is built on the server first (it downloads full-quality frames from CVAT), so the page
-// fetches it with the loading bar showing, then saves it like any download
+// Build the zip on the server, then download it
 async function downloadExport(task, button) {
   const label = button.textContent;
   button.disabled = true;
@@ -180,7 +175,7 @@ function showUpload(fraction, text) {
   $("new-task-progress").querySelector("span").textContent = text;
 }
 
-// Two steps, each with its own progress: the files come to this server, then this server sends them to CVAT
+// Upload to this server, then to CVAT
 $("new-task-form").onsubmit = (e) => {
   e.preventDefault();
   const form = new FormData($("new-task-form"));
@@ -227,7 +222,7 @@ async function watchUpload(id, name, fail) {
 }
 $("new-task-cancel").onclick = () => $("new-task-dialog").close();
 
-// As soon as files are picked, say how the boxes match the pictures (the server checks again on Create)
+// Preview how the boxes match the pictures
 $("new-task-files").onchange = $("new-task-boxes").onchange = () => checkBoxes().catch((error) => showMatch(error.message, true));
 
 function showMatch(text, bad = false) {

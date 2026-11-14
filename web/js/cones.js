@@ -1,8 +1,4 @@
-// cones.js: the "Sort cones" screen.
-//
-// Shows one cone at a time, close up, and asks for its colour (keys 1-9), or X if it's not a cone.
-// Changes go straight to CVAT; U undoes them. "Same cone in nearby frames" changes the
-// cone in the frames around it too.
+// cones.js: the Sort cones screen.
 
 // ------------------------------------------------------------- cones
 
@@ -159,8 +155,7 @@ function drawCrop(img, c) {
   ctx.lineWidth = dpr;
   ctx.strokeStyle = "rgba(255,255,255,.55)";
   for (const other of liveBoxes(c.frame)) if (other !== b) ctx.strokeRect(...rect(other, 0));
-  // White, not the class colour, so the outline doesn't sway the colour judgement.
-  // Drawn a little outside the box so it doesn't cover the cone's edge.
+  // White outline, drawn just outside the box
   ctx.setLineDash([]);
   for (const [width, colour] of [[4, "rgba(0,0,0,.6)"], [2, "#fff"]]) {
     ctx.lineWidth = width * dpr;
@@ -210,7 +205,7 @@ function sendCone(c, body, revert, done) {
 const coneById = (id) => cones.find((x) => x.box.id === id);
 const follow = () => $("follow").checked;
 
-// After CVAT confirms: show the change on every box it reached (with "follow", the same cone in other frames)
+// Apply the confirmed change to every affected box
 function boxesChanged(ids, change) {
   for (const id of ids) { const x = coneById(id); if (x) change(x.box); }
   if (ids.length > 1) toast(`Changed in ${ids.length} frames.`, "info");

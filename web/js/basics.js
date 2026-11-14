@@ -1,14 +1,4 @@
-// basics.js: small helpers and shared state that every other file uses.
-//
-//   $("id")              finds an element on the page
-//   el("div", {...}, …)  makes a new element
-//   api(path) / post()   talk to the server (review_web.py)
-//   send(...)            saves a change in the background, one at a time
-//   toast("message")     shows a short message at the bottom
-//   busy(text, work)     shows the red loading bar while `work` runs
-//
-// The order the files load in: basics, home, frames, gallery, cones, dialogs, main.
-// main.js loads last and starts everything.
+// basics.js: shared helpers and state used by every other file.
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
@@ -176,7 +166,7 @@ function classButton(l, i, onclick, className = "big") {
   return button;
 }
 
-// A thin CMR-red bar along the top while something loads from CVAT, so a click never looks ignored
+// Loading bar while something loads from CVAT
 let busyCount = 0;
 async function busy(text, work) {
   busyCount++;

@@ -1,16 +1,4 @@
-/* The look of the review page.
-
-   Colours (each one means something):
-     black by day / white at night = approved
-     CMR red  = needs fix, and the main button on each screen
-     rose     = cones still to sort
-     amber    = boxes changed after approval
-   Cone class colours (blue, yellow, ...) only ever describe cones.
-
-   Panels are "glass": see-through, blurred, floating over a faint blurred copy of the video (#ambient).
-
-   Two typefaces: the system face for headings, buttons and body text, and IBM Plex Sans (the family
-   of the CARNEGIE MELLON RACING wordmark) for the small secondary text: hints, sub-lines, legends, numbers. */
+/* Review page styles. Status colours: black/white = approved, red = needs fix, rose = to sort, amber = changed. */
 
 /* ---------- Colours and sizes. Night first, then day overrides it. */
 :root {

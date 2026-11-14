@@ -1,9 +1,4 @@
 // home.js: the Home screen.
-//
-// Top panel: % approved over all tasks, and the one thing to do next.
-// Pipeline: CVAT -> Assign -> Sort cones -> Review -> Export.
-// Each task is drawn as a timeline: one sliver per video frame, coloured by its status.
-// Hovering a timeline shows that frame; clicking opens it.
 
 // ------------------------------------------------------------- home
 
@@ -22,9 +17,7 @@ const nextStep = (s) => (s && !s.unknown ? 2 : 1);
 const finished = (s) => s && !s.unknown && s.approved === s.frames;
 const myAssignments = () => overview.flatMap((t) => t.assignments.filter((a) => a.username === me()).map((a) => [t, a]));
 
-// The timeline: each frame of the video as a sliver. Grey until a reviewer decides on it, then
-// green (approved), red (needs fix) or amber (boxes changed after approval). A thin violet line
-// underneath marks frames that still have unknown cones to sort.
+// Timeline: one sliver per frame, coloured by status
 const FRAME_STATES = {
   a: ["var(--ok)", "approved"], f: ["var(--bad)", "needs fix"], c: ["var(--warn)", "changed since approval"],
   ".": ["var(--todo)", "not reviewed yet"],
@@ -39,8 +32,7 @@ const peekDot = el("i"), peekNum = el("b"), peekText = el("span", { className: "
 const peek = el("div", { className: "peek", hidden: true }, peekImg, el("div", {}, peekDot, peekNum, peekText));
 document.body.append(peek);
 
-// Each new frame can mean a whole video chunk downloaded from CVAT, so the preview waits until the
-// pointer rests, keeps at most one request going, and shows frames it already has straight away.
+// Wait for the pointer to rest; one request at a time
 const peekSeen = new Set();
 let peekWant = null, peekBusy = false;
 function peekLoad(url) {
@@ -114,7 +106,7 @@ function timeline(task, states, unsorted = "", offset = 0, interactive = true) {
   return wrap;
 }
 
-// Frame numbers under a timeline, like distance markers along a track: round steps, plus the last frame
+// Frame number ticks under a timeline
 function scale(from, to) {
   const n = to - from + 1, rough = (n - 1) / 4;
   const pow = 10 ** Math.floor(Math.log10(Math.max(1, rough)));
@@ -204,7 +196,7 @@ function drawNext() {
   $("home-continue").onclick = go;
 }
 
-// The progress over every task, as a sentence, with every frame of every task drawn end to end below it
+// Overall progress sentence and combined timeline
 function drawTotals() {
   const ready = overview.length > 0 && overview.every((t) => summaries.has(t.id));
   const total = (key) => overview.reduce((n, t) => n + (summaries.get(t.id)?.task[key] ?? 0), 0);
@@ -278,8 +270,7 @@ function continueStep(step) {
 
 let homeLoading = null, homeAgain = false, homeLoadedAt = 0;
 function renderHome() {
-  // Never two rounds of CVAT requests at once: asking during a refresh runs one more right after it,
-  // so a decision made meanwhile is still counted
+  // Never run two refreshes at once
   if (homeLoading) { homeAgain = true; drawHome(); return homeLoading; }
   homeLoading = (async () => {
     do { homeAgain = false; await loadHome(); } while (homeAgain && mode === "home");
@@ -293,8 +284,7 @@ async function loadHome() {
     return toast(error.message);
   }
   drawHome();
-  // Approvals are saved in the background: count only once they've all reached CVAT,
-  // or the home page would show the numbers from before your last decisions
+  // Wait for pending saves before counting
   await queue;
   await Promise.all(overview.map(async (task) => {  // each needs the task's boxes from CVAT, so they fill in as they arrive
     let summary;

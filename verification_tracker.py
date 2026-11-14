@@ -16,12 +16,7 @@ _registered = set()   # (database, task, frame names) already registered by this
 
 @contextmanager
 def connect():
-    """One transaction: committed on success, rolled back on error, always closed.
-
-    The review page reads and writes from several threads at once. WAL lets reads go
-    on while one write is happening, and the timeout makes a write wait its turn
-    instead of failing with "database is locked".
-    """
+    """One transaction. WAL and a timeout let concurrent writes wait instead of failing."""
     db = sqlite3.connect(DB, timeout=30)
     try:
         if DB not in _wal:
@@ -125,8 +120,7 @@ def task_statuses(hashes, task_id=TASK_ID):
     return statuses
 
 
-# Every cone class change and deleted box, so each one can be traced and undone.
-# action is 'relabel', 'add', 'not_a_cone' (box deleted; shape keeps it) or 'undo_not_a_cone'.
+# Log every cone change so it can be traced and undone
 def log_cone_change(task_id, frame_name, shape_id, action, old_label, new_label,
                     reviewer, shape=None):
     with connect() as db:

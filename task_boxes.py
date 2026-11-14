@@ -1,15 +1,4 @@
-"""Read the boxes (annotations) that come with a new task, and match them to its frames.
-
-Used by review_web.py's "New task". Two kinds of box files:
-
-- SAM3 output from this project, turned into CVAT boxes here:
-    boxes.csv              one row per box: frame, colour, x0, y0, x1, y1  -> matched by FRAME NUMBER
-    sam3_labels/*.json     one file per picture: {"image": "frame_0000.jpg", "predictions": [...]}
-                                                                           -> matched by PICTURE NAME
-- Files CVAT reads itself (CVAT XML, COCO), handed to CVAT's own import, which matches by picture name.
-
-Everything is checked before the task is created, so a mismatch never leaves a half-made task.
-"""
+"""Read box files for a new task (SAM3 csv/json, CVAT XML, COCO) and match them to frames."""
 
 import csv
 import json
@@ -54,12 +43,7 @@ def describe_media(paths):
 # ---------------------------------------------------------------- reading box files
 
 def read_boxes(paths):
-    """Read the box files. Returns (kind, boxes, pictures):
-
-    ("frames", [(frame number, label, x1, y1, x2, y2)], {})  from boxes.csv
-    ("names",  [(picture name, label, x1, y1, x2, y2)], {picture names the files are for})  from SAM3 json
-    ("cvat",   format name, {})                              a file CVAT imports itself
-    """
+    """Read box files. Returns (kind, boxes, pictures); kind is "frames", "names" or "cvat"."""
     if not paths:
         return None, [], set()
     suffixes = {p.suffix.lower() for p in paths}
@@ -106,10 +90,7 @@ def read_sam3_json(path, doc):
 # ---------------------------------------------------------------- matching boxes to frames
 
 def check_boxes(kind, boxes, pictures, media, labels):
-    """Make sure every box belongs to a frame that exists and has a known label.
-
-    Raises BoxProblem naming what doesn't match. Returns a one-line summary for the person uploading.
-    """
+    """Check every box has a valid frame and label. Raises BoxProblem; returns a summary."""
     if kind in (None, "cvat"):
         return None
     unknown = sorted({b[1] for b in boxes} - set(labels))
@@ -132,13 +113,7 @@ def check_boxes(kind, boxes, pictures, media, labels):
 
 
 def to_cvat_shapes(kind, boxes, frame_of_name, label_ids, size_of_frame, shape):
-    """CVAT boxes for the new task. Boxes are kept inside the picture; ones with no area are skipped.
-
-    frame_of_name: picture name -> frame number in CVAT (CVAT decides the order when it sorts the pictures)
-    size_of_frame: frame number -> (width, height)
-    shape:         makes one CVAT box from (frame, label id, points)
-    Returns (shapes, how many were skipped).
-    """
+    """Build CVAT shapes clipped to the picture. Returns (shapes, skipped count)."""
     shapes, skipped = [], 0
     for key, label, x1, y1, x2, y2 in boxes:
         if not all(map(math.isfinite, (x1, y1, x2, y2))):  # "nan" or "inf" in the file

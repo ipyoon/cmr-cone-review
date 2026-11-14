@@ -1,5 +1,4 @@
-// gallery.js: the Gallery screen. Every frame as a small picture with its boxes.
-// Click one to open it; hover for quick Approve / Needs fix buttons.
+// gallery.js: the Gallery screen.
 
 // ------------------------------------------------------------- gallery
 

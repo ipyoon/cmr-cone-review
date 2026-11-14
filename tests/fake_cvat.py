@@ -1,13 +1,7 @@
-"""A stand-in for CVAT so the review page can be tested without a real login.
+"""Fake CVAT for tests: serves frames/ with sam3_labels/ boxes as task 3.
 
-It replaces the `cvat_sdk` package with the few calls this repo uses, and serves
-the real frames/ images with the real sam3_labels/ boxes as task 3. It holds
-nothing from your real CVAT and never talks to it. Test login: tester / test-pass
-
-SAM3 found no unknown cones in these frames, so every 6th box is made
-unknown_cone here to give the Cones screen something to sort.
-
-Try the page against it:  venv/bin/python tests/fake_cvat.py   (http://localhost:8091)
+Every 6th box is unknown_cone so there are cones to sort.
+Run: venv/bin/python tests/fake_cvat.py (http://localhost:8091, login tester / test-pass)
 """
 
 import io

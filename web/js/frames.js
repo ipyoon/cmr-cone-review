@@ -1,8 +1,4 @@
-// frames.js: the "Approve frames" screen.
-//
-// Shows one frame with its boxes. You can zoom and drag the picture, click a box to change
-// or delete it, draw a new box (B), and Approve (A) or mark Needs fix (F).
-// "Fix it now" keeps you on the frame with a bar at the bottom until you're done.
+// frames.js: the Approve frames screen.
 
 // Each reviewer's pipeline: 1. sort the unknown cones in your frames, 2. review your frames
 function stepsLeft() {
@@ -280,7 +276,7 @@ function askFix(index = current) {
   $("fix-note").value = "";
   $("fix-dialog").showModal();
 }
-// "Fix it now": stay on the frame (opening it first if you came from the gallery) and fix boxes by clicking them
+// Fix it now: stay on the frame and fix boxes by clicking them
 let fixing = null;  // frame index being fixed on the Approve screen
 $("fix-form").onsubmit = (e) => {
   e.preventDefault();
@@ -309,7 +305,7 @@ function renderFixBar() {
     el("button", { className: "primary", onclick: finishFix }, "Done, approve ", el("kbd", { textContent: "A" })));
 }
 
-// Approving straight after an edit needs the frame's new fingerprint: wait for the edits to reach CVAT, reload, then approve
+// Wait for edits to reach CVAT before approving
 async function finishFix() {
   const index = fixing;
   fixing = null;

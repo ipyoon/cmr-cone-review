@@ -1,14 +1,6 @@
-"""The review website: approve frames from CVAT, fix cones, and export the approved ones.
+"""Review website for CVAT: approve frames, fix cones, export approved ones.
 
-Start it:   venv/bin/python review_web.py     then open http://localhost:8092
-
-How it fits together
-- You log in with your CVAT account. The password goes to CVAT only and is never stored.
-- Approve / Needs fix are saved in verification.db, together with a "fingerprint" of the
-  frame's boxes. If anyone changes those boxes later, the approval stops counting.
-- Needs fix also opens an issue in CVAT, and each CVAT job's state follows the reviews.
-- Changing or deleting a cone happens directly in CVAT, and is logged so it can be undone.
-- New tasks (pictures or a video) can be created here too, like in CVAT, and new people added.
+Run: venv/bin/python review_web.py, then open http://localhost:8092
 """
 
 import asyncio
@@ -59,8 +51,7 @@ EXPORT_CLASSES = ["blue_cone", "yellow_cone", "orange_cone", "large_orange_cone"
 CONE_COLOURS = {"blue_cone": "#2f7bff", "yellow_cone": "#f5c400", "orange_cone": "#ff7a1a",
                 "large_orange_cone": "#e0218a", "unknown_cone": "#ffffff"}  # labels for new tasks
 
-# Images are slow (CVAT sends a whole chunk of video at a time), so they get their own
-# two worker threads. However many images are waiting, buttons keep working.
+# Images get their own threads so slow chunk downloads don't block other requests
 IMAGE_POOL = ThreadPoolExecutor(max_workers=2)
 
 
@@ -193,11 +184,7 @@ def overview(request):
 
 
 def summary(request):
-    """How far a task is: per task and per reviewer, plus one letter per frame for the timeline.
-
-    Counting needs every box from CVAT, which is slow for big tasks, so the answer is kept
-    for a minute, or until you change something.
-    """
+    """Task progress per reviewer and per frame, cached until something changes."""
     session = current_session(request)
     task_id = request.path_params["task_id"]
     saved = session.summaries.get(task_id)
@@ -320,12 +307,7 @@ def chunk_size(session, task_id):
 
 
 def chunk_frames(session, task_id, index, quality="compressed"):
-    """All frames of the CVAT chunk that holds frame `index`, as {frame number: JPEG}.
-
-    CVAT stores frames in chunks (a zip of pictures, or a short video), so one download
-    gives dozens of frames. Returns {} if the chunk can't be read.
-    Call this while holding session.image_lock.
-    """
+    """All frames in the CVAT chunk holding frame `index`, as {frame: JPEG}. Hold session.image_lock."""
     size = chunk_size(session, task_id)
     if not size:
         return {}
@@ -396,10 +378,7 @@ async def run_in_pool(function, *args):
 # ---------------------------------------------------------------- approving frames
 
 def sync_jobs(session, task_id, frames):
-    """Mirror review progress in CVAT's job list: rejected, in progress, or completed.
-
-    Returns a warning if CVAT refused (the change itself is already saved by then).
-    """
+    """Set the CVAT job state from its reviews. Returns a warning if CVAT refuses."""
     *_, jobs, names, hashes = load_task(session, task_id)
     statuses = task_statuses(hashes, task_id)
     refused = []
@@ -462,10 +441,7 @@ async def review(request):
 
 
 async def assign(request):
-    """Body: {assignments: [{username, start, stop}]}. Replaces who reviews which frames.
-
-    A CVAT job whose frames all go to one reviewer is assigned to them in CVAT too.
-    """
+    """Body: {assignments: [{username, start, stop}]}. Also assigns whole jobs in CVAT."""
     session = current_session(request)
     task_id = request.path_params["task_id"]
     body = await request.json()
@@ -555,15 +531,7 @@ def boxes_by_frame(shapes):
 
 
 def same_cone(by_frame, start, max_gap=1, memo=None):
-    """The same real cone in the frames before and after this one.
-
-    The camera moves a little each frame, so we follow the cone step by step: the next box
-    must be a similar size (half to double), its centre close (within 3/4 of the box size),
-    and the two boxes must be each other's best match, so we never jump to a neighbour.
-    Up to `max_gap` frames where the cone wasn't detected are skipped over.
-
-    `memo` remembers answers between calls (see suggestions), so nothing is worked out twice.
-    """
+    """Follow the same cone into nearby frames (similar size, close by, mutual best match)."""
     memo = {} if memo is None else memo
 
     def shape_of(s):  # (centre x, centre y, size), worked out once per box
@@ -603,10 +571,7 @@ def same_cone(by_frame, start, max_gap=1, memo=None):
 
 
 def suggestions(shapes, labels):
-    """For each unknown cone: the class the same cone has in nearby frames, by majority vote.
-
-    Returns {box id: {label, votes, of}}.
-    """
+    """Suggest a class for each unknown cone by majority vote across nearby frames."""
     unknown = unknown_label(labels)
     by_frame = boxes_by_frame(shapes)
     memo = {}  # shared by every cone below: following one cone saves work for its neighbours
@@ -622,14 +587,7 @@ def suggestions(shapes, labels):
 
 
 async def cone(request):
-    """Change one box in CVAT (and maybe the same cone in nearby frames).
-
-    {action: "relabel", label, expected, follow}  - change the class. `expected` is the class the
-        reviewer saw; if CVAT holds something else now, nothing changes (409).
-    {action: "not_a_cone", follow}               - delete the box (saved in the log so it can come back).
-    {action: "undo_not_a_cone", ids}             - put deleted boxes back.
-    follow: true also changes the same cone in nearby frames; ids: [...] changes exactly these boxes.
-    """
+    """Change one box in CVAT: relabel, not_a_cone (delete) or undo_not_a_cone."""
     session = current_session(request)
     task_id, shape_id = request.path_params["task_id"], request.path_params["shape_id"]
     body = await request.json()
@@ -717,8 +675,7 @@ async def add_box(request):
 
 
 async def auto_sort(request):
-    """Body: {ids}. Gives each unknown cone the class it has in every nearby frame
-    (at least 3 frames agree and none disagree). Returns the changes made."""
+    """Body: {ids}. Relabel unknown cones where at least 3 nearby frames agree."""
     session = current_session(request)
     task_id = request.path_params["task_id"]
     wanted = {int(i) for i in (await request.json()).get("ids", [])}
@@ -774,13 +731,7 @@ async def save_uploads(uploads, folder):
 
 
 async def new_task(request):
-    """A form with: name, project (optional), segment_size (optional), prepare ("on"/"off"),
-    files (the pictures or the video) and boxes (optional: the annotations, see task_boxes.py).
-
-    Everything is checked first: a box file that doesn't match the pictures is refused before
-    anything is created in CVAT. Then the task is created in the background. Returns an upload id;
-    GET /api/uploads/<id> says how it's going: sending, preparing, adding boxes, done or failed.
-    """
+    """Create a CVAT task from uploaded files, checking any box file first. Returns an upload id."""
     session = current_session(request)
     form = await request.form(max_files=100000)
     name = str(form.get("name", "")).strip()
@@ -881,10 +832,7 @@ def upload_status(request):
 
 
 async def add_user(request):
-    """Body: {username, email, password}. Creates a CVAT account, using CVAT's own sign-up.
-
-    Works when sign-up is open on your CVAT (the default); otherwise CVAT's answer is shown.
-    """
+    """Body: {username, email, password}. Create a CVAT account via sign-up."""
     current_session(request)
     body = await request.json()
     username, email, password = (str(body.get(k, "")).strip() for k in ("username", "email", "password"))
@@ -924,11 +872,7 @@ def yolo_lines(boxes, label_names, size, name):
 
 
 def build_export(session, task_id, path):
-    """Write the approved frames to a zip: images/, labels/ (YOLO) and data.yaml.
-
-    Same rules as export_verified.py: a frame counts only while CVAT still holds the boxes
-    that were approved. Pictures are full quality. Returns (task name, number of frames).
-    """
+    """Zip the still-approved frames as a YOLO dataset. Returns (task name, frame count)."""
     task, annotations, meta, labels, _, names, hashes = load_task(session, task_id)
     statuses = task_statuses(hashes, task_id)
     approved = [i for i, name in enumerate(names) if statuses.get(name, {}).get("status") == "verified"]
@@ -995,13 +939,7 @@ async def cvat_error(_request, exc):
 
 
 async def fresh_answers(request, call_next):
-    """Runs around every request.
-
-    - Every change (POST) bumps the session's version, so saved progress isn't reused.
-      It's bumped again afterwards, in case progress was counted while the change was running.
-    - API answers are marked "don't cache", so the browser never shows old numbers,
-      and the page's own files are re-checked every time, so an update shows up at once.
-    """
+    """Bump the session version on changes and disable caching for API responses."""
     try:
         session = current_session(request) if request.method == "POST" else None
     except HTTPException:

@@ -1,23 +1,8 @@
-"""
-extract_frames.py
-
-Pulls camera frames out of a single .mcap file so we have a handful of test
-images to run Grounding DINO and SAM3 on.
-
-IMPORTANT: check with your team first whether there's already an internal
-util for this (PerceptionsLibrary / driverless-ml-dev likely has one, since
-every perception member needs to pull frames out of mcap/rosbag data). If
-one exists, use it instead - it'll already know your exact topic names and
-message types. This script is a generic fallback in case there isn't one
-handy, or you just want something standalone for this quick test.
+"""Extract camera frames from an .mcap file.
 
 Usage:
-    python extract_frames.py --mcap path/to/session.mcap --list-topics
-    python extract_frames.py --mcap path/to/session.mcap --topic /camera/image_raw --every-n 30 --max-frames 15 --out frames/
-
-Step 1: always run with --list-topics first. MCAP files can contain many
-topics (LiDAR, camera, IMU, CAN...) - you need to see the exact topic name
-and message type for your camera before extracting.
+    python extract_frames.py --mcap session.mcap --list-topics
+    python extract_frames.py --mcap session.mcap --topic /camera/image_raw --every-n 30 --max-frames 15 --out frames/
 """
 
 import argparse
@@ -42,11 +27,7 @@ def list_topics(mcap_path: str):
 
 
 def decode_image_message(schema_name: str, msg_bytes: bytes, typestore):
-    """
-    Decodes a single ROS2 message's raw CDR bytes into a numpy BGR image.
-    Handles both sensor_msgs/msg/Image (raw) and sensor_msgs/msg/CompressedImage
-    (jpeg/png bytes), which cover the vast majority of ROS2 camera topics.
-    """
+    """Decode a ROS2 Image or CompressedImage message into a BGR image."""
     msg = typestore.deserialize_cdr(msg_bytes, schema_name)
 
     if schema_name.endswith("CompressedImage"):
