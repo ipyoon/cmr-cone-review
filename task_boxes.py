@@ -3,7 +3,6 @@
 import csv
 import json
 import math
-from pathlib import Path
 
 from PIL import Image
 
@@ -15,7 +14,7 @@ class BoxProblem(ValueError):
     """A box file that doesn't fit the pictures. The message says what to fix."""
 
 
-# ---------------------------------------------------------------- the pictures or video
+# The pictures or video
 
 def describe_media(paths):
     """What was uploaded: ("images", {name: (width, height)}) or ("video", frame count, (width, height))."""
@@ -40,7 +39,7 @@ def describe_media(paths):
     return "images", sizes
 
 
-# ---------------------------------------------------------------- reading box files
+# Reading box files
 
 def read_boxes(paths):
     """Read box files. Returns (kind, boxes, pictures); kind is "frames", "names" or "cvat"."""
@@ -87,7 +86,7 @@ def read_sam3_json(path, doc):
     return [(image, p["label"], *map(float, p["bbox"])) for p in doc["predictions"]]
 
 
-# ---------------------------------------------------------------- matching boxes to frames
+# Matching boxes to frames
 
 def check_boxes(kind, boxes, pictures, media, labels):
     """Check every box has a valid frame and label. Raises BoxProblem; returns a summary."""

@@ -55,10 +55,10 @@ CONE_COLOURS = {"blue_cone": "#2f7bff", "yellow_cone": "#f5c400", "orange_cone":
 IMAGE_POOL = ThreadPoolExecutor(max_workers=2)
 
 
-# ---------------------------------------------------------------- logged-in people
+# Logged-in people
 
 class Session:
-    """Everything we keep for one logged-in person, in memory."""
+    """Everything for one logged-in person is kept in memory."""
 
     def __init__(self, client, image_client, upload_client, username):
         self.client = client                # for boxes, reviews and everything else
@@ -68,7 +68,7 @@ class Session:
         self.lock = threading.Lock()        # a CVAT client can only do one thing at a time
         self.image_lock = threading.Lock()
         self.frames = {}       # (task, frame number) -> JPEG bytes
-        self.thumbs = {}       # same, but small, for the gallery and previews
+        self.thumbs = {}       # same, but small, for the gallery
         self.chunk_sizes = {}  # task -> how many frames CVAT puts in one chunk
         self.task_sizes = {}   # task -> how many frames the task has
         self.summaries = {}    # task -> (version, time, progress) for the home page
@@ -131,8 +131,7 @@ def me(request):
     return JSONResponse({"username": current_session(request).username})
 
 
-# ---------------------------------------------------------------- reading from CVAT
-
+# Reading from CVAT
 def load_task(session, task_id):
     """A task's frames and boxes, straight from CVAT (never cached, so always up to date)."""
     with session.lock:
@@ -213,7 +212,6 @@ def summary(request):
     result = {
         "task": stats(0, len(names) - 1),
         "timeline": "".join(letter.get(s, ".") for s in status),
-        "unsorted": "".join("1" if unknown_at[i] else "0" for i in range(len(names))),
         "assignments": [{"username": u, "start": a, "stop": b, **stats(a, b)} for u, a, b in get_assignments(task_id)],
     }
     session.summaries[task_id] = (version, time.time(), result)
@@ -258,7 +256,7 @@ def frames(request):
     })
 
 
-# ---------------------------------------------------------------- pictures
+# Pictures
 
 CACHE_LOCK = threading.Lock()
 
@@ -375,7 +373,7 @@ async def run_in_pool(function, *args):
     return await asyncio.get_running_loop().run_in_executor(IMAGE_POOL, function, *args)
 
 
-# ---------------------------------------------------------------- approving frames
+# Approving frames
 
 def sync_jobs(session, task_id, frames):
     """Set the CVAT job state from its reviews. Returns a warning if CVAT refuses."""
@@ -480,7 +478,7 @@ async def assign(request):
     return JSONResponse({"warning": await run_in_threadpool(apply)})
 
 
-# ---------------------------------------------------------------- changing boxes
+# Changing boxes
 
 def shape_fields(shape):
     """Every field CVAT needs to send a box back or recreate it (plain values, so it can be logged)."""
@@ -615,12 +613,7 @@ async def cone(request):
             raise HTTPException(404, "This box is no longer in CVAT.")
         if shape.type.value != "rectangle":
             raise HTTPException(422, "Only boxes can be changed here.")
-        if body.get("ids"):
-            targets = [shapes[i] for i in ids if i in shapes]
-        elif body.get("follow"):
-            targets = [t for t in same_cone(boxes_by_frame(annotations.shapes), shape) if t.label_id == shape.label_id]
-        else:
-            targets = [shape]
+        targets = [shapes[i] for i in ids if i in shapes]
 
         if action == "relabel":
             label, expected = body.get("label"), body.get("expected")
@@ -696,7 +689,7 @@ async def auto_sort(request):
     return JSONResponse(await run_in_threadpool(apply))
 
 
-# ---------------------------------------------------------------- new tasks and new people
+# New tasks and new people
 
 def projects(request):
     session = current_session(request)
@@ -852,7 +845,7 @@ async def add_user(request):
     return JSONResponse({"username": username})
 
 
-# ---------------------------------------------------------------- export (download a zip)
+# Export (download a zip)
 
 def yolo_lines(boxes, label_names, size, name):
     """A frame's boxes as YOLO label lines: class x-centre y-centre width height (all 0 to 1)."""
@@ -922,7 +915,7 @@ async def export(request):
                         headers={"X-Frame-Count": str(count)}, background=BackgroundTask(os.unlink, path))
 
 
-# ---------------------------------------------------------------- the app
+# The app
 
 def index(_request):
     return HTMLResponse((WEB / "index.html").read_text())

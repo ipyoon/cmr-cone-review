@@ -1,33 +1,33 @@
-// dialogs.js: Assign, New task and Export dialogs.
+// The pop-up windows: Assign, Export and New task.
 
-let users = null;  // names to choose from in the Assign dialog: CVAT's users, plus anyone added
+
+// Assign
+
+let users = null;  // CVAT usernames
 async function openAssign() {
-  if (!data) {  // e.g. from the home page, before any task was opened
-    try { await busy("Loading the task from CVAT…", () => loadTask(true)); } catch (error) { return toast(error.message); }
+  if (!data) {  // opened from Home before any task was loaded
+    try {
+      await busy("Loading the task from CVAT…", () => loadTask(true));
+    } catch (error) {
+      return toast(error.message);
+    }
   }
-  try {
-    users ??= await busy("Loading CVAT users…", () => api("/api/users"));
-  } catch (error) {
-    return toast(error.message);
-  }
-  // People already given frames here stay on the list, even without a CVAT account
-  for (const a of data.assignments) if (!users.includes(a.username)) users.push(a.username);
-  drawPeople(new Set(data.assignments.map((a) => a.username)));
+  users ??= await api("/api/users").catch(() => []);
+  $("cvat-users").replaceChildren(...users.map((u) => el("option", { value: u })));
   fillAssign(data.assignments);
   $("assign-error").hidden = true;
   $("assign-dialog").showModal();
+  $("person-name").focus();
 }
 
-const checkedUsers = () => [...$("assign-users").querySelectorAll("input:checked")].map((i) => i.value);
+// The names in the table right now
+const assigned = () => [...$("assign-rows").children].map((row) => row.dataset.user);
 
-function drawPeople(chosen) {
-  $("assign-users").replaceChildren(...users.map((u) => el("label", {},
-    el("input", { type: "checkbox", value: u, checked: chosen.has(u), onchange: () => fillAssign(splitFrames(checkedUsers())) }), u)));
-}
-
-// Add a name; with email and password, create their CVAT account first
+// "Add reviewer"; also option for making new CVAT account
 $("person-add").onclick = async () => {
-  const name = $("person-name").value.trim(), email = $("person-email").value.trim(), password = $("person-password").value;
+  const name = $("person-name").value.trim();
+  const email = $("person-email").value.trim();
+  const password = $("person-password").value;
   if (!name) return $("person-name").focus();
   $("assign-error").hidden = true;
   if (email || password) {
@@ -40,25 +40,24 @@ $("person-add").onclick = async () => {
       return;
     }
   }
-  const chosen = new Set([...checkedUsers(), name]);
-  if (!users.includes(name)) users.push(name);
-  drawPeople(chosen);
-  fillAssign(splitFrames(checkedUsers()));
+  if (!assigned().includes(name)) fillAssign(splitFrames([...assigned(), name]));
   $("person-name").value = $("person-email").value = $("person-password").value = "";
 };
 $("person-name").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("person-add").click(); } };
 
-// Split frames into even ranges, aligned to CVAT jobs when possible
+// Split the frames evenly between people. If the task has enough CVAT jobs, cut where a job starts.
 function splitFrames(people) {
   const n = data.frames.length;
-  const cuts = data.jobs.length >= people.length && data.jobs.length > 1 ? data.jobs.map((j) => j.start).filter((s) => s > 0) : null;
+  const useJobs = data.jobs.length >= people.length && data.jobs.length > 1;
+  const jobStarts = useJobs ? data.jobs.map((j) => j.start).filter((s) => s > 0) : [];
+  const closest = (options, target) => options.reduce((a, c) => (Math.abs(c - target) < Math.abs(a - target) ? c : a));
   let start = 0;
   return people.map((username, i) => {
     let next = n;
     if (i < people.length - 1) {
       const target = Math.round(((i + 1) * n) / people.length);
-      const options = cuts?.filter((c) => c > start) ?? [];
-      next = options.length ? options.reduce((a, c) => (Math.abs(c - target) < Math.abs(a - target) ? c : a)) : Math.max(target, start + 1);
+      const options = jobStarts.filter((c) => c > start);
+      next = options.length ? closest(options, target) : Math.max(target, start + 1);
     }
     const row = { username, start, stop: next - 1 };
     start = next;
@@ -66,18 +65,27 @@ function splitFrames(people) {
   });
 }
 
+// Draw the table of reviewers and their frames
 function fillAssign(rows) {
   const frame = (value) => el("input", { type: "number", min: 0, max: data.frames.length - 1, value });
-  $("assign-rows").replaceChildren(...rows.map((r) =>
-    el("tr", {}, el("td", { textContent: r.username }), el("td", {}, frame(r.start)), el("td", {}, frame(r.stop)), el("td", { className: "muted" }))));
+  const remove = (name) => el("button", { type: "button", className: "ghost sm", textContent: "Remove", ariaLabel: `Remove ${name}`,
+    onclick: () => fillAssign(splitFrames(assigned().filter((u) => u !== name))) });
+  $("assign-rows").replaceChildren(...rows.map((r) => {
+    const row = el("tr", {}, el("td", { className: "who", textContent: r.username }), el("td", {}, frame(r.start)), el("td", {}, frame(r.stop)),
+      el("td", { className: "muted frames" }), el("td", {}, remove(r.username)));
+    row.dataset.user = r.username;
+    return row;
+  }));
+  $("assign-table").hidden = !rows.length;
   $("assign-empty").hidden = rows.length > 0;
   countAssign();
 }
 
+// The "8 frames" next to each row
 function countAssign() {
   for (const row of $("assign-rows").children) {
     const [first, last] = row.querySelectorAll("input");
-    row.lastChild.textContent = `${Math.max(0, last.value - first.value + 1)} frames`;
+    row.querySelector(".frames").textContent = `${Math.max(0, last.value - first.value + 1)} frames`;
   }
 }
 
@@ -87,7 +95,7 @@ $("assign-form").onsubmit = async (e) => {
   e.preventDefault();
   const assignments = [...$("assign-rows").children].map((row) => {
     const [first, last] = row.querySelectorAll("input");
-    return { username: row.firstChild.textContent, start: Number(first.value), stop: Number(last.value) };
+    return { username: row.dataset.user, start: Number(first.value), stop: Number(last.value) };
   });
   try {
     const result = await post(`/api/tasks/${data.task.id}/assignments`, { assignments });
@@ -101,11 +109,14 @@ $("assign-form").onsubmit = async (e) => {
   }
 };
 
-// Build the zip on the server, then download it
+
+// Export
+
+// The server builds the zip, then the browser downloads it
 async function downloadExport(task, button) {
   const label = button.textContent;
   button.disabled = true;
-  button.textContent = "Building zip…";  // the dialog covers the top loading bar
+  button.textContent = "Building zip…";
   try {
     await busy(`Building ${task.name} export…`, async () => {
       const res = await fetch(`/api/tasks/${task.id}/export.zip`);
@@ -135,26 +146,13 @@ function showExport() {
         el("div", { className: "small muted", textContent: n === undefined ? `${plural(t.size, "frame")}` : `${plural(n, "approved frame")} of ${t.size.toLocaleString()}` })),
       button);
   }));
-  $("export-commands").replaceChildren(...overview.map((t) =>
-    el("div", {}, el("div", { className: "small muted", textContent: `${t.name}` }),
-      el("div", { className: "copy-row" },
-        el("code", { textContent: `CVAT_TASK_ID=${t.id} venv/bin/python export_verified.py` }),
-        el("button", { className: "ghost", textContent: "Copy", onclick: async (e) => {
-          const button = e.currentTarget;
-          try {
-            await navigator.clipboard.writeText(button.previousSibling.textContent);
-            button.textContent = "Copied";
-          } catch {
-            button.textContent = "Select and ⌘C";
-          }
-          setTimeout(() => (button.textContent = "Copy"), 1500);
-        } })))));
   $("export-dialog").showModal();
 }
 
-// ------------------------------------------------------------- new task
 
-let projects = null;  // CVAT projects, for the New task dialog
+// New task
+
+let projects = null;  // CVAT projects, for the dropdown
 async function openNewTask() {
   try {
     projects ??= await busy("Loading CVAT projects…", () => api("/api/projects"));
@@ -175,7 +173,7 @@ function showUpload(fraction, text) {
   $("new-task-progress").querySelector("span").textContent = text;
 }
 
-// Upload to this server, then to CVAT
+// Upload the files here, then this server sends them on to CVAT
 $("new-task-form").onsubmit = (e) => {
   e.preventDefault();
   const form = new FormData($("new-task-form"));
@@ -191,7 +189,7 @@ $("new-task-form").onsubmit = (e) => {
     $("new-task-submit").disabled = false;
   };
 
-  const request = new XMLHttpRequest();  // unlike fetch, this reports upload progress
+  const request = new XMLHttpRequest();  // used instead of fetch because it reports upload progress
   request.open("POST", "/api/tasks/new");
   request.upload.onprogress = (p) => p.lengthComputable && showUpload(p.loaded / p.total / 2, `Uploading… ${Math.round((100 * p.loaded) / p.total)}%`);
   request.onerror = () => fail("The upload stopped. Check the connection and try again.");
@@ -203,6 +201,7 @@ $("new-task-form").onsubmit = (e) => {
   request.send(form);
 };
 
+// Ask the server every second how creating the task is going
 async function watchUpload(id, name, fail) {
   for (;;) {
     let status;
@@ -222,7 +221,7 @@ async function watchUpload(id, name, fail) {
 }
 $("new-task-cancel").onclick = () => $("new-task-dialog").close();
 
-// Preview how the boxes match the pictures
+// As soon as files are picked, say how the box file matches the pictures
 $("new-task-files").onchange = $("new-task-boxes").onchange = () => checkBoxes().catch((error) => showMatch(error.message, true));
 
 function showMatch(text, bad = false) {
@@ -238,7 +237,8 @@ async function checkBoxes() {
   const pictures = new Set(media.filter((f) => !f.type.startsWith("video/")).map((f) => f.name));
   const names = boxFiles.map((f) => f.name.toLowerCase());
 
-  if (names.length === 1 && names[0].endsWith(".csv")) {  // SAM3 boxes.csv: matched by frame number
+  // SAM3's boxes.csv: boxes are matched to frames by frame number
+  if (names.length === 1 && names[0].endsWith(".csv")) {
     const rows = (await boxFiles[0].text()).trim().split("\n");
     const header = rows.shift().split(",");
     const frame = header.indexOf("frame");
@@ -249,6 +249,7 @@ async function checkBoxes() {
     if (last >= pictures.size) return showMatch(`boxes.csv has boxes up to frame ${last}, but you chose ${pictures.size} pictures (frames 0 to ${pictures.size - 1}).`, true);
     return showMatch(`${rows.length.toLocaleString()} boxes on ${used} of ${pictures.size} pictures. Matched by frame number.`);
   }
+  // SAM3 .json files (one per picture) or one COCO file: matched by picture name
   if (names.every((n) => n.endsWith(".json"))) {
     const docs = await Promise.all(boxFiles.map(async (f) => ({ file: f, doc: JSON.parse(await f.text()) })));
     if (docs.length === 1 && docs[0].doc.images && docs[0].doc.annotations) return showMatch("COCO file: CVAT matches it to the pictures by name.");

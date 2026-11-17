@@ -2,7 +2,6 @@
 verified_dataset/
 verified_dataset_backup/
 out_sam3/
-review_priority.csv
 
 # Local database
 verification.db

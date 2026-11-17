@@ -7,7 +7,6 @@ import http.cookiejar
 import io
 import json
 import os
-import runpy
 import sqlite3
 import sys
 import tempfile
@@ -31,7 +30,6 @@ fake_cvat.install()
 
 import uvicorn  # noqa: E402
 
-import cvat_auth  # noqa: E402
 import review_web  # noqa: E402
 
 PORT = 8097
@@ -109,7 +107,7 @@ class ReviewWebTest(unittest.TestCase):
 
     def test_page_and_frames_load(self):
         b = Browser().login()
-        self.assertIn(b"CMR Frame Review", b.call("/")[1])
+        self.assertIn(b"<title>Sammie", b.call("/")[1])
         self.assertEqual(b.call("/api/me")[1]["username"], "tester")
         data = b.call("/api/tasks/3/frames")[1]
         self.assertEqual(len(data["frames"]), 15)
@@ -254,34 +252,25 @@ class ReviewWebTest(unittest.TestCase):
         b.call("/api/tasks/3/assignments", {"assignments": []})
         self.assertEqual(b.call("/api/tasks/3/frames")[1]["assignments"], [])
 
-    def test_fix_follows_the_same_cone_through_the_video(self):
+    def test_a_change_touches_only_the_chosen_box(self):
         b = Browser().login()
-        # The orange cone at the bottom left, as SAM3 found it in each frame
+        b.call("/api/tasks/3/frames")  # registers the frames
+        # The orange cone at the bottom left; the same cone in other frames must stay as it is
         start = next(s for s in fake_cvat.TASK.shapes if s.frame == 5 and s.label_id == 3)
         chain = [s for s in review_web.same_cone(review_web.boxes_by_frame(fake_cvat.TASK.shapes), start) if s.label_id == 3]
-        frames = sorted(s.frame for s in chain)
-        self.assertGreater(len(frames), 5)
-        self.assertEqual(len(frames), len(set(frames)))  # one box per frame
+        self.assertGreater(len(chain), 5)
 
         status, body = b.call(f"/api/tasks/3/cones/{start.id}", {"action": "relabel", "label": 4, "expected": 3, "follow": True})
-        self.assertEqual(status, 200)
-        self.assertEqual(sorted(body["ids"]), sorted(s.id for s in chain))
+        self.assertEqual((status, body["ids"]), (200, [start.id]))
         labels = {s.id: s.label_id for s in fake_cvat.TASK.shapes}
-        self.assertTrue(all(labels[i] == 4 for i in body["ids"]))
+        self.assertEqual([labels[s.id] for s in chain if s.id != start.id], [3] * (len(chain) - 1))
+        b.call(f"/api/tasks/3/cones/{start.id}", {"action": "relabel", "label": 3, "expected": 4})
 
-        # Undo: exactly those boxes go back
-        b.call(f"/api/tasks/3/cones/{start.id}", {"action": "relabel", "label": 3, "expected": 4, "ids": body["ids"]})
-        labels = {s.id: s.label_id for s in fake_cvat.TASK.shapes}
-        self.assertTrue(all(labels[i] == 3 for i in body["ids"]))
-
-        # Delete it everywhere, then put it all back
+        # Delete it, then put it back
         status, body = b.call(f"/api/tasks/3/cones/{start.id}", {"action": "not_a_cone", "follow": True})
-        self.assertEqual(len(body["ids"]), len(chain))
-        self.assertFalse(set(body["ids"]) & {s.id for s in fake_cvat.TASK.shapes})
+        self.assertEqual(body["ids"], [start.id])
         status, back = b.call(f"/api/tasks/3/cones/{start.id}", {"action": "undo_not_a_cone", "ids": body["ids"]})
-        self.assertEqual(len(back["restored"]), len(chain))
-        restored = [s for s in fake_cvat.TASK.shapes if s.id in back["restored"].values()]
-        self.assertEqual(sorted(s.frame for s in restored), frames)
+        self.assertEqual(len(back["restored"]), 1)
 
     def test_unknown_cones_get_suggestions_and_auto_sort(self):
         b = Browser().login()
@@ -335,22 +324,11 @@ class ReviewWebTest(unittest.TestCase):
         row = frame_row(b, "frame_0007.jpg")
         b.call("/api/tasks/3/review", {"frame": row["name"], "decision": "approve", "hash": row["hash"]})
         self.assertNotEqual(frame_row(b, "frame_0000.jpg")["status"], "verified")
+        archive = zipfile.ZipFile(io.BytesIO(b.call("/api/tasks/3/export.zip")[1]))
+        self.assertTrue(archive.read("labels/frame_0007.txt").strip())
 
-        out = TMP / "export"
-        os.environ["OUTPUT_DIR"] = str(out)
-        os.environ["IMAGES_DIR"] = str(fake_cvat.REPO / "frames")
-        original = cvat_auth.login
-        cvat_auth.login = lambda client: client.login(("tester", "test-pass"))
-        try:
-            runpy.run_path(str(fake_cvat.REPO / "export_verified.py"), run_name="__main__")
-        finally:
-            cvat_auth.login = original
-        self.assertIn("frame_0007.txt", [p.name for p in (out / "labels").iterdir()])
-        self.assertTrue((out / "labels" / "frame_0007.txt").read_text().strip())
-
-
-    def test_export_download_matches_command_line_export(self):
-        """The page's download holds the approved frames, with the same YOLO labels as export_verified.py."""
+    def test_export_download_has_images_labels_and_yaml(self):
+        """The page's download holds the approved frames with YOLO labels."""
         b = Browser().login()
         row = frame_row(b, "frame_0009.jpg")
         b.call("/api/tasks/3/review", {"frame": row["name"], "decision": "approve", "hash": row["hash"]})

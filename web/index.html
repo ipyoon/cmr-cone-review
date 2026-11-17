@@ -3,13 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CMR Frame Review</title>
+<title>Sammie, CMR cone review</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23a71e31'/%3E%3Cpath d='M14 27 86 73M14 73 86 27' stroke='%23fff' stroke-width='9'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#f4f3f0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap">
 <link rel="stylesheet" href="/web/style.css">
 </head>
 <body>
 
-<!-- The CMR mark, drawn once and reused. Wings take the text colour so they read in both themes. -->
+<!-- The CMR logo and the icons, drawn once here and reused on the page -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <mask id="logo-wing-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="2576" height="960">
@@ -23,7 +27,6 @@
       <path stroke="#000" stroke-width="49" d="M500 -161 2076 829M500 -15 2076 975M500 131 2076 1121M500 1121 2076 131M500 975 2076 -15M500 829 2076 -161"/>
     </mask>
     <path id="logo-wing" d="M0 113H1288V325H200Q116 325 76 252ZM144 373H1288V585H344Q260 585 220 512ZM288 633H1288V845H488Q404 845 364 772ZM640 113H1288V845H640Z"/>
-    <!-- Icons: 24×24, 2px round strokes. Used as <svg class="i"><use href="#i-right"/></svg> -->
     <symbol id="i-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
     <symbol id="i-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
@@ -42,7 +45,7 @@
 <div id="login" hidden>
   <form id="login-form">
     <svg class="logo" viewBox="0 0 2576 960" role="img" aria-label="CMR"><use href="#logo"/></svg>
-    <h1>Frame Review</h1>
+    <h1>Sammie</h1>
     <p>Sign in with your CVAT account.</p>
     <input id="username" placeholder="Username" autocomplete="username" required autofocus>
     <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
@@ -57,7 +60,7 @@
 
 <div id="app" hidden>
   <header class="top">
-    <span class="brand" id="brand" role="button" tabindex="0" title="Home"><svg class="logo" viewBox="0 0 2576 960" role="img" aria-label="CMR"><use href="#logo"/></svg><span>Frame Review</span></span>
+    <span class="brand" id="brand" role="button" tabindex="0" title="Home"><svg class="logo" viewBox="0 0 2576 960" role="img" aria-label="CMR"><use href="#logo"/></svg><span>Sammie</span></span>
     <select id="task" aria-label="Task" data-show="frames gallery cones"></select>
     <nav class="seg" id="mode" aria-label="Screen">
       <button data-mode="home">Home</button>
@@ -93,8 +96,6 @@
       title="Gives an unknown cone the colour it has in every frame around it (at least 3 frames, none disagreeing). You can undo it."></button>
     <span id="fixing" data-show="cones"><b id="fixing-text"></b> <button id="fix-done" class="ghost">Back to frame</button></span>
     <button id="back-gallery" class="ghost" data-show="frames"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg> Gallery</button>
-    <label class="toggle" data-show="frames cones" title="A change also applies to the same cone in the frames just before and after, as the video moves">
-      <input type="checkbox" id="follow"> Same cone in nearby frames</label>
     <span class="spacer"></span>
     <span id="position" class="muted"></span>
     <input id="jump" type="number" min="0" placeholder="Frame #" aria-label="Go to frame" data-show="frames">
@@ -107,37 +108,38 @@
   </div>
 
   <section id="home" data-show="home">
-    <div class="home-wrap">
-      <header class="hero">
-        <img src="/web/img/car.jpg" srcset="/web/img/car-small.jpg 1200w, /web/img/car.jpg 2400w" sizes="(max-width: 1200px) 100vw, 1120px"
-          alt="Carnegie Mellon Racing's car 46 driving between orange cones">
-        <div class="hero-text">
-          <h1 id="home-next-title">Loading your work…</h1>
-          <p id="home-next-where"></p>
-          <button id="home-continue" class="cta" hidden></button>
-        </div>
-      </header>
+    <header class="hero">
+      <div class="hero-text">
+        <h1>Sammie</h1>
+        <p class="hero-next"><span class="eyebrow">Next up</span><span id="home-next-title">Loading your work…</span></p>
+        <p id="home-next-where"></p>
+        <button id="home-continue" class="cta" hidden></button>
+      </div>
+      <img src="/web/img/car.jpg" srcset="/web/img/car-small.jpg 1200w, /web/img/car.jpg 2400w" sizes="100vw"
+        alt="Carnegie Mellon Racing's car 46 driving between orange cones">
+    </header>
 
+    <div class="home-wrap">
       <section class="home-block">
-        <h2 id="home-total">Counting frames…</h2>
-        <p class="lede" id="home-badge"></p>
-        <div id="home-strip"></div>
+        <div class="block-head"><h2>Progress</h2><p id="home-total"></p></div>
+        <p class="hint bar-hint">Click a part of a bar to see those frames.</p>
+        <div id="home-bars"></div>
         <div class="legend" id="home-legend"></div>
       </section>
 
       <section class="home-block">
-        <h2>Pipeline <span class="hint">Click a stage to jump in.</span></h2>
+        <div class="block-head"><h2>Pipeline</h2></div>
         <div id="flow" class="steps"></div>
       </section>
 
       <section class="home-block" id="home-mine-block">
-        <h2>Your assignments</h2>
+        <div class="block-head"><h2>Your assignments</h2></div>
         <div id="home-mine" class="mine"></div>
       </section>
 
       <section class="home-block">
-        <h2>Tasks <span class="hint">Hover a timeline to see the frame, click to open it.</span>
-          <button id="new-task" class="soft sm push"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg> New task</button></h2>
+        <div class="block-head"><h2>Tasks</h2>
+          <button id="new-task"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg> New task</button></div>
         <div id="home-tasks" class="task-list"></div>
       </section>
     </div>
@@ -226,7 +228,6 @@
       <button id="approve" class="primary big">Approve <kbd>A</kbd></button>
       <button id="next" class="big" aria-label="Next frame"><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
     </div>
-    <div class="tip">Approve only if every box is right and no cone is missing. Click a box to change or delete it; B or Shift-drag draws a new one.</div>
   </footer>
 </div>
 
@@ -246,14 +247,12 @@
 <dialog id="assign-dialog">
   <form id="assign-form">
     <h3>Assign frames</h3>
-    <p>Tick who reviews this task, or add someone new: the frames are split into even, back-to-back ranges, which you can adjust.
-      Each reviewer first sorts the unknown cones in their frames, then reviews those frames.
-      CVAT jobs that fall entirely in one person's frames are assigned to them in CVAT too.</p>
-    <div id="assign-users" class="checks"></div>
+    <p>Add each reviewer by name. The frames are split evenly between them, and you can adjust the ranges.</p>
     <div class="add-person">
-      <input id="person-name" placeholder="Add someone: name or CVAT username" autocomplete="off">
-      <button type="button" id="person-add">Add</button>
+      <input id="person-name" list="cvat-users" placeholder="Name or CVAT username" autocomplete="off" aria-label="Reviewer's name">
+      <button type="button" id="person-add">Add reviewer</button>
     </div>
+    <datalist id="cvat-users"></datalist>
     <details class="add-account">
       <summary>They don't have a CVAT account? Create one</summary>
       <p>Uses CVAT's own sign-up. Send them the password; they can change it in CVAT.</p>
@@ -263,11 +262,11 @@
       </div>
     </details>
     <table id="assign-table">
-      <thead><tr><th>Reviewer</th><th>First frame</th><th>Last frame</th><th></th></tr></thead>
+      <thead><tr><th>Reviewer</th><th>First frame</th><th>Last frame</th><th></th><th></th></tr></thead>
       <tbody id="assign-rows"></tbody>
     </table>
-    <p id="assign-empty" class="small">Nobody is assigned: everyone sees all frames.</p>
-    <p id="assign-error" class="small" style="color:var(--bad)" hidden></p>
+    <p id="assign-empty" class="small">No reviewers yet, so everyone sees all frames.</p>
+    <p id="assign-error" class="small" style="color:var(--red)" hidden></p>
     <div class="row">
       <button type="button" id="assign-cancel" class="ghost">Cancel</button>
       <button class="primary">Save</button>
@@ -289,7 +288,7 @@
     <label class="toggle"><input type="checkbox" name="prepare" checked>
       Prepare every frame now: slower to create, much faster to review</label>
     <div id="new-task-progress" hidden><div class="track"><i></i></div><span></span></div>
-    <p id="new-task-error" class="small" style="color:var(--bad)" hidden></p>
+    <p id="new-task-error" class="small" style="color:var(--red)" hidden></p>
     <div class="row">
       <button type="button" id="new-task-cancel" class="ghost">Cancel</button>
       <button class="cta" id="new-task-submit">Create task</button>
@@ -302,11 +301,6 @@
   <p>Downloads a zip of every approved frame at full quality, with its boxes as YOLO labels:
     <b>images/</b>, <b>labels/</b> and <b>data.yaml</b>. Frames whose boxes changed after approval are left out.</p>
   <div id="export-list" class="export-list"></div>
-  <details class="export-cli">
-    <summary>Or export from the terminal</summary>
-    <p>Run in the project folder. It writes to <b>verified_dataset/</b>; for a video task add <b>VIDEO_PATH=</b><i>path/to/video</i> first.</p>
-    <div id="export-commands" style="display:grid;gap:8px"></div>
-  </details>
   <div class="row"><button id="export-close">Close</button></div>
 </dialog>
 
@@ -347,10 +341,9 @@
 </dialog>
 
 <div id="toast" role="status" hidden></div>
-<div id="ambient" aria-hidden="true"></div>
 <div id="busy" aria-live="polite"><i></i><span id="busy-text"></span></div>
 
-<!-- The page's code, one file per part. Each file starts with what it does. -->
+<!-- The code, one file per screen. main.js goes last because it starts the page. -->
 <script src="/web/js/basics.js"></script>
 <script src="/web/js/home.js"></script>
 <script src="/web/js/frames.js"></script>

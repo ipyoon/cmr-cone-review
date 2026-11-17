@@ -1,19 +1,12 @@
-import os
 import json
 import hashlib
 
-from cvat_sdk import make_client
-from cvat_auth import login
 
-TASK_ID = int(os.getenv("CVAT_TASK_ID", "3"))
-HOST = os.getenv("CVAT_HOST", "http://localhost:8080")
-
-
-# Calculate a fingerprint for each frame
+# A fingerprint of each frame's boxes. If any box changes, the fingerprint changes.
 def calculate_hashes(annotations, frames):
     hashes = {}
 
-    # Group boxes by frame first, so big tasks don't scan every box for every frame
+    # Group the boxes by frame first (much faster on big tasks)
     by_frame = {}
     for box in annotations.shapes:
         by_frame.setdefault(box.frame, []).append(box)
@@ -41,15 +34,3 @@ def frame_names(task, meta):
         return [frame.name for frame in meta.frames]
     return [f"frame_{i:06d}.jpg" for i in range(task.size)]
 
-
-# Get annotations from CVAT
-def get_frame_hashes(client, task_id=TASK_ID):
-    task = client.tasks.retrieve(task_id)
-    annotations = task.get_annotations()
-    return calculate_hashes(annotations, frame_names(task, task.get_meta()))
-
-
-if __name__ == "__main__":
-    hashes = get_frame_hashes()
-    print(f"Calculated {len(hashes)} frame fingerprints")
-    print("First frame:", next(iter(hashes)))

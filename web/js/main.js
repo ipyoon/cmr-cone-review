@@ -1,31 +1,30 @@
-// main.js: starts the page and wires up buttons and keys. Loaded last.
-
-// ------------------------------------------------------------- loading
+// Starts the page and connects the buttons and keys. This file loads last.
 
 async function start(username) {
   $("who").textContent = username;
   $("login").hidden = true;
   $("app").hidden = false;
   const tasks = await loadTaskList();
-  if (!tasks.length) return setMode("home");  // nothing to review yet: Home has "New task"
-  setMode(["frames", "cones", "gallery"].includes(store("review.mode")) ? store("review.mode") : "home");
+  if (!tasks.length) return showMode("home");
+  showMode(["frames", "cones", "gallery"].includes(store("review.mode")) ? store("review.mode") : "home");
 }
 
-// The task picker in the top bar (also refreshed after "New task")
+// The task dropdown in the top bar
 async function loadTaskList() {
   const tasks = await api("/api/tasks");
-  $("task").replaceChildren(...tasks.map((t) => el("option", { value: t.id, textContent: `${t.name} · ${t.size} frames` })));
+  $("task").replaceChildren(...tasks.map((t) => el("option", { value: t.id, textContent: `${t.name} (${t.size} frames)` })));
   const saved = store("review.task");
   if (tasks.some((t) => String(t.id) === saved)) $("task").value = saved;
   return tasks;
 }
 
+// Load the open task's frames and boxes. fresh: start at the top. Otherwise stay on the same frame and box.
 let taskLoadedAt = 0;
 async function loadTask(fresh, keepId) {
   const keep = fresh ? undefined : keepId ?? cones[coneAt]?.box.id;
   const sentBefore = sent;
   const loaded = await api(`/api/tasks/${$("task").value}/frames`);
-  // A change made while this was loading isn't in it: wait until it's saved, then load again
+  // If a change was sent while this loaded, the answer is already out of date: wait, then load again
   if (sent !== sentBefore) {
     await queue;
     return loadTask(fresh, keep);
@@ -42,70 +41,80 @@ async function loadTask(fresh, keepId) {
     coneAt = 0;
     undoStack = [];
   }
-  // Stay on the same box after a reload, or the next unsorted one if it's gone
+  // Stay on the same box, or the next one if it's gone
   const same = keep !== undefined && cones.find((c) => c.box.id === keep);
   coneAt = same ? same.pos : coneList.find((p) => p >= coneAt) ?? cones.length;
   show();
 }
 
-// Blurred background frame, delayed so fast paging doesn't load every one
-let ambientUrl = "";
-function setAmbient() {
-  const task = data?.task.id ?? overview[0]?.id;
-  if (task == null) return;
-  const size = data?.frames.length ?? overview[0]?.size ?? 1;
-  const index = mode === "frames" ? current : mode === "cones" && cones[coneAt] ? cones[coneAt].frame.index : Math.floor(size / 2);
-  const url = `/api/tasks/${task}/frames/${index}/image?size=small`;
-  if (url === ambientUrl) return;
-  ambientUrl = url;
-  clearTimeout(setAmbient.timer);
-  setAmbient.timer = setTimeout(() => {
-    const img = new Image();
-    img.onload = () => { if (ambientUrl === url) $("ambient").style.backgroundImage = `url("${url}")`; };
-    img.src = url;
-  }, 500);
-}
-
-// Draw the screen that's showing
+// Redraw the screen that's showing
 function show() {
-  setAmbient();
-  ({ cones: renderCone, gallery: renderGallery, frames: render, home: () => {} })[mode]();
+  if (mode === "cones") renderCone();
+  else if (mode === "gallery") renderGallery();
+  else if (mode === "frames") render();
 }
 
-function buildList() { list = data.frames.filter((f) => inScope(f.index) && FILTERS[filter](f)).map((f) => f.index); }
+// The frames that match the filter (To review, Needs fix, ...)
+function buildList() {
+  list = data.frames.filter((f) => inScope(f.index) && FILTERS[filter](f)).map((f) => f.index);
+}
 
+// "My frames" vs "All frames": which frames are assigned to you
 function setupScope() {
   const ranges = data.assignments.filter((a) => a.username === who());
-  mine = ranges.length ? new Set(ranges.flatMap((a) => Array.from({ length: a.stop - a.start + 1 }, (_, i) => a.start + i))) : null;
+  mine = null;
+  if (ranges.length) {
+    mine = new Set();
+    for (const a of ranges) for (let i = a.start; i <= a.stop; i++) mine.add(i);
+  }
+  const rangeText = ranges.map((a) => `#${a.start}–${a.stop}`).join(", ");
   $("scope").replaceChildren(
-    el("option", { value: "mine", textContent: `${whose("My", "@'s")} frames (${ranges.map((a) => `#${a.start}–${a.stop}`).join(", ")})` }),
+    el("option", { value: "mine", textContent: `${whose("My", "@'s")} frames (${rangeText})` }),
     el("option", { value: "all", textContent: "All frames" }));
   $("scope").value = scope;
   $("scope").hidden = !mine;
 }
 
+// Switch screens with a fade, if the browser can do it (Chrome's View Transitions)
 function setMode(next, reload = true) {
+  const noFade = !document.startViewTransition
+    || matchMedia("(prefers-reduced-motion: reduce)").matches
+    || !$("app").classList.contains("ready")
+    || document.hidden
+    || next === mode;
+  if (noFade) return showMode(next, reload);
+  let result;
+  const fade = document.startViewTransition(() => { result = showMode(next, reload); });
+  fade.ready.catch(() => {});  // the fade can be skipped (say, the tab got hidden); the screen still switches
+  return fade.updateCallbackDone.then(() => result);
+}
+
+function showMode(next, reload = true) {
   mode = next;
   store("review.mode", mode);
   for (const button of $("mode").children) button.setAttribute("aria-pressed", button.dataset.mode === mode);
-  // Each part of the page lists the screens it belongs to in data-show="..."
+  // Each part of the page says which screens it's on, in data-show="..."
   for (const node of document.querySelectorAll("[data-show]")) node.hidden = !node.dataset.show.split(" ").includes(mode);
+  $("app").classList.add("ready");
   if (next !== "cones") fixFrame = null;
   if (next === "gallery") { fromGallery = false; scrollToLast = true; }
   if (next === "home") return renderHome();
   if (!data) return loadTask(true).catch((e) => toast(e.message));
-  if (!reload) {  // the task was just loaded
+  if (!reload) {  // the task was just loaded, no need to load it again
     buildList();
     buildConeList();
     firstCone();
     return show();
   }
-  if (mode === "cones") { cones = []; coneAt = 0; }  // start at the first unsorted box
-  // Reload either way: cone changes alter the fingerprints the Frames screen approves
+  if (mode === "cones") {  // start at the first unsorted box
+    cones = [];
+    coneAt = 0;
+  }
+  // Reload, because cone changes made elsewhere change which frames can be approved
   loadTask(false).catch((e) => toast(e.message));
 }
 
-// Selects and inputs give the keyboard back to the shortcuts once a choice is made
+// After picking from a dropdown, give the keyboard back to the shortcuts
 const onPick = (id, fn) => ($(id).onchange = () => { $(id).blur(); fn(); });
 onPick("scope", () => {
   scope = $("scope").value;
@@ -132,11 +141,10 @@ $("gallery-size").oninput = () => {
   $("gallery").style.setProperty("--card", `${$("gallery-size").value}px`);
   store("review.size", $("gallery-size").value);
 };
-$("follow").checked = store("review.follow") !== "off";
-$("follow").onchange = () => { $("follow").blur(); store("review.follow", $("follow").checked ? "on" : "off"); };
 $("gallery-size").value = store("review.size") ?? 240;
 $("gallery-size").oninput();
 
+// What each button does (by id). The keyboard shortcuts below reuse these.
 const clicks = {
   flag: flagCone, skip: skipCone, "cone-undo": undoCone,
   "cone-edit": () => cones[coneAt] && openInCvat(cones[coneAt].frame.index),
@@ -176,6 +184,7 @@ $("login-form").onsubmit = async (e) => {
   }
 };
 
+// Keyboard shortcuts on each screen: key -> button id
 const KEYS = {
   cones: { escape: "fix-done", x: "flag", s: "skip", u: "cone-undo", e: "cone-edit", z: "wide", arrowright: "cone-next", n: "cone-next", arrowleft: "cone-prev", p: "cone-prev" },
   gallery: {},
@@ -209,7 +218,7 @@ window.addEventListener("keydown", (e) => {
   if (action) { e.preventDefault(); action(); }
 });
 
-// Back from CVAT: reload boxes, at most every 20 s
+// Coming back to this tab (say, from CVAT): reload, at most every 20 seconds
 window.addEventListener("focus", () => {
   if (mode === "home" && !$("app").hidden) return Date.now() - homeLoadedAt > 30000 && renderHome();
   if (data && !inFlight && Date.now() - taskLoadedAt > 20000) loadTask(false).catch(() => {});

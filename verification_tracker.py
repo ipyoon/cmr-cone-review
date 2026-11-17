@@ -4,12 +4,8 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from cvat_fingerprint import get_frame_hashes
-from cvat_sdk import make_client
-from cvat_auth import login
 
 DB = os.getenv("VERIFICATION_DB", "verification.db")
-TASK_ID = int(os.getenv("CVAT_TASK_ID", "3"))
 _wal = set()          # databases already switched to WAL by this process
 _registered = set()   # (database, task, frame names) already registered by this process
 
@@ -29,7 +25,7 @@ def connect():
 
 
 # Create the table if needed and register frames as pending
-def register_frames(names, task_id=TASK_ID):
+def register_frames(names, task_id):
     key = (DB, task_id, hash(tuple(names)))
     if key in _registered:  # nothing new to write: the page asks for this on every load
         return
@@ -58,16 +54,9 @@ def register_frames(names, task_id=TASK_ID):
     _registered.add(key)
 
 
-def setup():
-    with make_client(host=os.getenv("CVAT_HOST", "http://localhost:8080")) as client:
-        login(client)
-        hashes = get_frame_hashes(client)
-    register_frames(hashes)
-    print(f"Ready! {len(hashes)} frames registered.")
-
 
 # Save approval and fingerprint
-def mark_verified(frame_name, hashes, reviewer, task_id=TASK_ID):
+def mark_verified(frame_name, hashes, reviewer, task_id):
     if frame_name not in hashes:
         raise ValueError("Frame not found in CVAT")
 
@@ -88,11 +77,9 @@ def mark_verified(frame_name, hashes, reviewer, task_id=TASK_ID):
         if result.rowcount == 0:
             raise ValueError("Frame not registered")
 
-    print(f"Verified: {frame_name}")
-
 
 # Mark a frame as needing a fix, or put it back to pending (no fingerprint kept)
-def set_status(frame_name, status, reviewer, task_id=TASK_ID):
+def set_status(frame_name, status, reviewer, task_id):
     with connect() as db:
         result = db.execute("""
             UPDATE frame_reviews
@@ -105,7 +92,7 @@ def set_status(frame_name, status, reviewer, task_id=TASK_ID):
 
 
 # Every frame's current status, for showing a whole task at once
-def task_statuses(hashes, task_id=TASK_ID):
+def task_statuses(hashes, task_id):
     with connect() as db:
         rows = db.execute("""
             SELECT frame_name, status, reviewer, annotation_hash FROM frame_reviews
@@ -184,25 +171,3 @@ def get_assignments(task_id):
             WHERE task_id = ? ORDER BY frame_start
         """, (task_id,)).fetchall()
 
-
-# Check whether approval is still valid
-def check_verification(frame_name, hashes, task_id=TASK_ID):
-    with connect() as db:
-        row = db.execute("""
-            SELECT status, annotation_hash FROM frame_reviews
-            WHERE task_id = ? AND frame_name = ?
-        """, (task_id, frame_name)).fetchone()
-
-    if row is None:
-        return "not_registered"
-
-    status, saved_hash = row
-
-    if status == "verified" and saved_hash != hashes.get(frame_name):
-        return "needs_reverification"
-
-    return status
-
-
-if __name__ == "__main__":
-    setup()
