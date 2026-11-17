@@ -205,6 +205,18 @@ function toFrame(e) {
   return { x: ((e.clientX - r.left) / r.width) * f.width, y: ((e.clientY - r.top) / r.height) * f.height };
 }
 
+// Which part of the selected box is under the mouse: a corner ("nw", "ne", "sw", "se"), "inside", or null
+function grabAt(p) {
+  const box = selected != null && liveBoxes(data.frames[current]).find((b) => b.id === selected);
+  if (!box) return null;
+  const r = (8 * data.frames[current].width) / ($("view").getBoundingClientRect().width || 1);  // 8 screen pixels
+  const names = ["nw", "ne", "sw", "se"];
+  const corner = cornersOf(box).findIndex(([x, y]) => Math.abs(p.x - x) <= r && Math.abs(p.y - y) <= r);
+  if (corner >= 0) return names[corner];
+  return p.x >= box.x1 && p.x <= box.x2 && p.y >= box.y1 && p.y <= box.y2 ? "inside" : null;
+}
+const GRAB_CURSOR = { nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize", inside: "move" };
+
 $("stage").addEventListener("pointerleave", () => {
   if (hovered == null || !data?.frames[current]) return;
   hovered = null;
@@ -216,7 +228,14 @@ $("stage").addEventListener("pointerdown", (e) => {
   if (!data?.frames[current] || onOverlay(e)) return;
   drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, from: toFrame(e), draw: drawing || e.shiftKey };
   $("stage").setPointerCapture(e.pointerId);
-  if (!drag.draw) $("stage").classList.add("dragging");
+  const grab = drag.draw ? null : grabAt(drag.from);
+  if (grab) {  // moving or resizing the selected box
+    drag.grab = grab;
+    drag.box = liveBoxes(data.frames[current]).find((b) => b.id === selected);
+    drag.start = positionOf(drag.box);
+  } else if (!drag.draw) {
+    $("stage").classList.add("dragging");
+  }
 });
 
 $("stage").addEventListener("pointermove", (e) => {
@@ -224,11 +243,27 @@ $("stage").addEventListener("pointermove", (e) => {
   if (!drag) {
     // Not dragging: outline the box under the mouse
     if (!frame || !showBoxes || drawing || onOverlay(e)) return;
+    $("stage").style.cursor = GRAB_CURSOR[grabAt(toFrame(e))] ?? "";
     const id = boxAt(toFrame(e));
     if (id === hovered) return;
     hovered = id;
     $("stage").classList.toggle("over-box", id != null);
     drawBoxes($("boxes"), frame, showBoxes, { selected, sketch: pending, hovered });
+  } else if (drag.grab) {
+    const p = toFrame(e);
+    const dx = p.x - drag.from.x;
+    const dy = p.y - drag.from.y;
+    const { x1, y1, x2, y2 } = drag.start;
+    const box = drag.box;
+    if (drag.grab === "inside") {
+      Object.assign(box, { x1: x1 + dx, y1: y1 + dy, x2: x2 + dx, y2: y2 + dy });
+    } else {  // a corner: "nw", "ne", "sw" or "se"
+      if (drag.grab[1] === "w") box.x1 = x1 + dx;
+      if (drag.grab[1] === "e") box.x2 = x2 + dx;
+      if (drag.grab[0] === "n") box.y1 = y1 + dy;
+      if (drag.grab[0] === "s") box.y2 = y2 + dy;
+    }
+    drawBoxes($("boxes"), frame, showBoxes, { selected });
   } else if (drag.draw) {
     const p = toFrame(e);
     sketch = { x1: Math.min(drag.from.x, p.x), y1: Math.min(drag.from.y, p.y), x2: Math.max(drag.from.x, p.x), y2: Math.max(drag.from.y, p.y) };
@@ -244,8 +279,11 @@ $("stage").addEventListener("pointerup", (e) => {
   if (!drag) return;
   const moved = Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 4;
   const bigEnough = sketch && sketch.x2 - sketch.x1 >= 3 && sketch.y2 - sketch.y1 >= 3;
-  if (drag.draw && bigEnough) {
+  if (drag.grab) {
+    if (moved) moveBox(drag.box, drag.start);  // a plain click just keeps it selected
+  } else if (drag.draw && bigEnough) {
     pending = sketch;  // next, the user picks its color
+    keepDrawing = drawing;  // in draw mode (B), draw another one after that
     drawing = false;
   } else if (!drag.draw && !moved) {
     selectAt(drag.from);
@@ -411,6 +449,7 @@ function openInCvat(index = current) {
 let selected = null;   // id of the clicked box
 let pending = null;    // a newly drawn box that still needs a color
 let drawing = false;
+let keepDrawing = false;  // stay in draw mode after each new box
 let hovered = null;
 let lastEdit = null;   // "box" or "decision": what U undoes here
 
@@ -435,21 +474,26 @@ function renderEditBar() {
 
   let text = null;
   if (pending) text = "New box: pick its class";
-  else if (box) text = `${niceName(labelName(box.label))} box: change to`;
-  else if (drawing) text = "Drag on the picture to draw a box";
+  else if (box) text = `${niceName(labelName(box.label))} box`;
+  else if (drawing) text = "Drag on the picture to draw a box. Esc when done";
   $("edit-bar").hidden = !text;
   if (!text) return;
 
   const colorButtons = pending || box ? data.labels.slice(0, 9).map((l, i) => classButton(l, i, () => pickClass(l.id), "")) : [];
   const deleteButton = box ? [el("button", { className: "danger", onclick: deleteSelected }, "Delete ", el("kbd", { textContent: "X" }))] : [];
+  const close = drawing && !pending ? "Done " : "Cancel ";
   $("edit-bar").replaceChildren(el("span", { textContent: text }), ...colorButtons, ...deleteButton,
-    el("button", { onclick: cancelEdit }, "Cancel ", el("kbd", { textContent: "Esc" })));
+    el("button", { onclick: cancelEdit }, close, el("kbd", { textContent: "Esc" })));
 }
 
 function pickClass(label) {
   lastEdit = "box";
-  if (pending) addBox(label);
-  else if (selected != null && coneById(selected)) changeClass(coneById(selected), label);
+  if (pending) {
+    addBox(label);
+    drawing = keepDrawing;
+  } else if (selected != null && coneById(selected)) {
+    changeClass(coneById(selected), label);
+  }
   selected = null;
   render();
 }
@@ -464,8 +508,29 @@ function deleteSelected() {
 
 function cancelEdit() {
   selected = pending = sketch = null;
-  drawing = false;
+  drawing = keepDrawing = false;
   render();
+}
+
+// After dragging a box: tidy its corners, save it, and remember where it was for undo
+function moveBox(box, from) {
+  const f = data.frames[current];
+  const clamp = (v, max) => Math.min(Math.max(v, 0), max);
+  [box.x1, box.x2] = [box.x1, box.x2].map((v) => clamp(v, f.width)).sort((a, b) => a - b);
+  [box.y1, box.y2] = [box.y1, box.y2].map((v) => clamp(v, f.height)).sort((a, b) => a - b);
+  lastEdit = "box";
+  undoStack.push({ id: box.id, kind: "move", from });
+  saveMove(box, from);
+}
+
+// Send a box's new corners to CVAT. If it fails, put it back at `from`.
+function saveMove(box, from) {
+  const { x1, y1, x2, y2 } = box;
+  send(`/cones/${box.id}`, { action: "move", expected: [from.x1, from.y1, from.x2, from.y2], x1, y1, x2, y2 }, {
+    revert: (error) => { Object.assign(box, from); toast(error.message); },
+    retry: () => loadTask(false),
+    done: () => loadTask(false).catch((e) => toast(e.message)),  // approving needs the new fingerprint
+  });
 }
 
 function addBox(label) {

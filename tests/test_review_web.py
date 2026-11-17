@@ -272,6 +272,29 @@ class ReviewWebTest(unittest.TestCase):
         status, back = b.call(f"/api/tasks/3/cones/{start.id}", {"action": "undo_not_a_cone", "ids": body["ids"]})
         self.assertEqual(len(back["restored"]), 1)
 
+    def test_move_a_box(self):
+        b = Browser().login()
+        b.call("/api/tasks/3/frames")
+        shape = next(s for s in fake_cvat.TASK.shapes if s.frame == 2)
+        old = [float(v) for v in shape.points]
+        moved = {"x1": old[0] + 5, "y1": old[1] + 5, "x2": old[2] + 10, "y2": old[3] + 10}
+
+        status, body = b.call(f"/api/tasks/3/cones/{shape.id}", {"action": "move", "expected": old, **moved})
+        self.assertEqual(status, 200)
+        now = next(s for s in fake_cvat.TASK.shapes if s.id == shape.id)
+        self.assertEqual([float(v) for v in now.points], [moved[k] for k in ("x1", "y1", "x2", "y2")])
+        self.assertEqual(now.label_id, shape.label_id)
+
+        # Someone else moved it since: refuse
+        self.assertEqual(b.call(f"/api/tasks/3/cones/{shape.id}", {"action": "move", "expected": old, **moved})[0], 409)
+
+        # A box dragged past the edge stays inside the picture
+        expected = [float(v) for v in now.points]
+        status, _ = b.call(f"/api/tasks/3/cones/{shape.id}", {"action": "move", "expected": expected,
+                                                               "x1": -50, "y1": old[1], "x2": old[2], "y2": old[3]})
+        now = next(s for s in fake_cvat.TASK.shapes if s.id == shape.id)
+        self.assertEqual((status, float(now.points[0])), (200, 0))
+
     def test_unknown_cones_get_suggestions_and_auto_sort(self):
         b = Browser().login()
         boxes = [x for f in b.call("/api/tasks/3/frames")[1]["frames"] for x in f["boxes"]]

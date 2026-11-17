@@ -3,7 +3,7 @@
 let cones = [];      // every box in the task, in frame order: { box, frame, pos }
 let coneList = [];   // positions (pos) of the boxes still to sort
 let coneAt = 0;      // the position on screen (cones.length means "past the end")
-let undoStack = [];  // what U undoes: { id, kind: "relabel" | "flag" | "keep" | "add" | "auto", ... }
+let undoStack = [];  // what U undoes: { id, kind: "relabel" | "move" | "flag" | "keep" | "add" | "auto", ... }
 let coneZoom = 3;    // how much picture to show around the cone, in box sizes, or "full"
 let conePan = null;  // where the user dragged the close-up to (reset for each new cone)
 let coneGeom = null; // the last close-up drawn, used for zooming and dragging
@@ -349,6 +349,10 @@ function undoCone() {
     }
   } else if (!c) {
     return toast("That box is no longer in CVAT.");
+  } else if (last.kind === "move") {
+    const now = positionOf(c.box);
+    Object.assign(c.box, last.from);
+    saveMove(c.box, now);
   } else if (last.kind === "relabel") {
     updateBoxes(last.ids, (b) => (b.label = last.from));
     sendCone(c, { action: "relabel", label: last.from, expected: last.to, ids: last.ids },

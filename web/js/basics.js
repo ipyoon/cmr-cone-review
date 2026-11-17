@@ -118,15 +118,20 @@ function labelColor(id) {
   return FALLBACK_COLORS[label?.name] || label?.color || "#ff00ff";
 }
 
+// A box's corners: top-left, top-right, bottom-left, bottom-right
+const cornersOf = (b) => [[b.x1, b.y1], [b.x2, b.y1], [b.x1, b.y2], [b.x2, b.y2]];
+// Just a box's position
+const positionOf = ({ x1, y1, x2, y2 }) => ({ x1, y1, x2, y2 });
+
 // Draw a frame's boxes into an <svg>. The selected or hovered box gets a white outline and a light fill.
 function drawBoxes(svg, frame, visible = true, { selected, sketch, hovered } = {}) {
   svg.setAttribute("viewBox", `0 0 ${frame.width} ${frame.height}`);
   svg.setAttribute("preserveAspectRatio", "none");
 
-  const rect = (b, stroke, width, dash = "none", fill = "none") => {
+  const rect = (b, stroke, width, dash = "none", fill = "none", opacity = .22) => {
     const node = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     const attrs = {
-      x: b.x1, y: b.y1, width: b.x2 - b.x1, height: b.y2 - b.y1, fill, "fill-opacity": .22,
+      x: b.x1, y: b.y1, width: b.x2 - b.x1, height: b.y2 - b.y1, fill, "fill-opacity": opacity,
       stroke, "stroke-width": width, "vector-effect": "non-scaling-stroke", "stroke-dasharray": dash,
     };
     for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
@@ -141,6 +146,11 @@ function drawBoxes(svg, frame, visible = true, { selected, sketch, hovered } = {
     else shapes.push(rect(b, color, 2));
   }
   if (sketch) shapes.push(rect(sketch, "#fff", 2, "6 4"));
+
+  // White squares on the selected box's corners, for resizing
+  const box = visible && liveBoxes(frame).find((b) => b.id === selected);
+  const r = (5 * frame.width) / (svg.getBoundingClientRect().width || frame.width);  // 5 screen pixels
+  for (const [x, y] of box ? cornersOf(box) : []) shapes.push(rect({ x1: x - r, y1: y - r, x2: x + r, y2: y + r }, "#111", 1.5, "none", "#fff", 1));
   svg.replaceChildren(...shapes);
 }
 

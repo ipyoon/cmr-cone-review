@@ -584,18 +584,32 @@ def suggestions(shapes, labels):
     return found
 
 
+def corners_from(body, meta, frame):
+    """The box corners in a request, kept inside the picture. Refuses missing or tiny boxes."""
+    try:
+        x1, y1, x2, y2 = (float(body[k]) for k in ("x1", "y1", "x2", "y2"))
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(422, "A box needs its four corners.")
+    size = frame_size(meta, frame)
+    x1, x2 = sorted(min(max(v, 0.0), float(size.width)) for v in (x1, x2))
+    y1, y2 = sorted(min(max(v, 0.0), float(size.height)) for v in (y1, y2))
+    if x2 - x1 < 2 or y2 - y1 < 2:
+        raise HTTPException(422, "That box is too small.")
+    return [x1, y1, x2, y2]
+
+
 async def cone(request):
-    """Change one box in CVAT: relabel, not_a_cone (delete) or undo_not_a_cone."""
+    """Change one box in CVAT: relabel, move (new corners), not_a_cone (delete) or undo_not_a_cone."""
     session = current_session(request)
     task_id, shape_id = request.path_params["task_id"], request.path_params["shape_id"]
     body = await request.json()
     action = body.get("action")
-    if action not in ("relabel", "not_a_cone", "undo_not_a_cone"):
+    if action not in ("relabel", "move", "not_a_cone", "undo_not_a_cone"):
         raise HTTPException(422, "Unknown action.")
     ids = [int(i) for i in body.get("ids") or [shape_id]]
 
     def apply():
-        task, annotations, _, labels, _, names, _ = load_task(session, task_id)
+        task, annotations, meta, labels, _, names, _ = load_task(session, task_id)
 
         if action == "undo_not_a_cone":
             saved = {i: fields for i in ids if (fields := deleted_shape(task_id, i)) is not None}
@@ -614,6 +628,16 @@ async def cone(request):
         if shape.type.value != "rectangle":
             raise HTTPException(422, "Only boxes can be changed here.")
         targets = [shapes[i] for i in ids if i in shapes]
+
+        if action == "move":
+            points = corners_from(body, meta, shape.frame)
+            if [round(float(v), 1) for v in shape.points] != [round(float(v), 1) for v in body.get("expected", [])]:
+                raise HTTPException(409, "This box changed in CVAT. Look at it again.")
+            send_shapes(session, task, AnnotationUpdateAction.UPDATE,
+                        [shape_request({**shape_fields(shape), "points": points, "id": shape.id}, labels)])
+            log_cone_change(task_id, names[shape.frame], shape.id, action, shape.label_id, shape.label_id,
+                            session.username, shape_fields(shape))
+            return {"ids": [shape.id], "warning": sync_jobs(session, task_id, {shape.frame})}
 
         if action == "relabel":
             label, expected = body.get("label"), body.get("expected")
@@ -648,17 +672,12 @@ async def add_box(request):
         task, _, meta, labels, _, names, _ = load_task(session, task_id)
         try:
             frame, label = int(body["frame"]), int(body["label"])
-            x1, y1, x2, y2 = (float(body[k]) for k in ("x1", "y1", "x2", "y2"))
         except (KeyError, TypeError, ValueError):
-            raise HTTPException(422, "A box needs a frame, a class and its corners.")
+            raise HTTPException(422, "A box needs a frame and a class.")
         if not 0 <= frame < len(names) or label not in {x.id for x in labels}:
             raise HTTPException(422, "Unknown frame or class.")
-        size = frame_size(meta, frame)
-        x1, x2 = sorted(min(max(v, 0.0), float(size.width)) for v in (x1, x2))  # keep it inside the picture
-        y1, y2 = sorted(min(max(v, 0.0), float(size.height)) for v in (y1, y2))
-        if x2 - x1 < 2 or y2 - y1 < 2:
-            raise HTTPException(422, "That box is too small.")
-        fields = dict(type="rectangle", frame=frame, label_id=label, points=[x1, y1, x2, y2], group=0,
+        points = corners_from(body, meta, frame)
+        fields = dict(type="rectangle", frame=frame, label_id=label, points=points, group=0,
                       source="manual", occluded=False, outside=False, z_order=0, rotation=0.0, attributes=[])
         [new_id] = create_shapes(session, task, labels, [fields])
         log_cone_change(task_id, names[frame], new_id, "add", None, label, session.username)

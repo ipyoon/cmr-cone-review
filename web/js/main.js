@@ -153,9 +153,9 @@ const clicks = {
   approve: () => decide("approve"), fix: () => askFix(), reset: () => decide("reset"),
   edit: () => openInCvat(), prev: () => step(-1), next: () => step(1),
   toggle: () => { showBoxes = !showBoxes; render(); },
-  draw: () => { drawing = !drawing; selected = pending = null; render(); },
+  draw: () => { drawing = !drawing; keepDrawing = false; selected = pending = null; render(); },
   "auto-sort": autoSort,
-  help: () => $("help-dialog").showModal(), "help-close": () => $("help-dialog").close(),
+  "help-close": () => $("help-dialog").close(),
   "fix-done": () => fixFrame !== null && endFix(),
   brand: () => setMode("home"),
   theme: () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"),
@@ -198,7 +198,7 @@ window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "BUTTON" && (key === " " || key === "enter")) return;
   const n = Number(e.key);
   let action = clicks[KEYS[mode][key]];
-  if (key === "?") action = clicks.help;
+  if (key === "?") action = () => $("help-dialog").showModal();
   const digit = Number.isInteger(n) && n >= 1 && n <= Math.min(9, data.labels.length) ? data.labels[n - 1].id : null;
   if (mode === "cones" && digit != null) action = () => relabel(digit);
   if (mode === "cones" && key === "enter" && cones[coneAt]?.box.suggest) action = () => relabel(cones[coneAt].box.suggest.label);

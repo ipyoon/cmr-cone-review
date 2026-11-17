@@ -141,7 +141,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 32px; text-o
 #sync { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
 #sync::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
 #sync.saving::before { background: var(--grey); animation: pulse 1s ease-in-out infinite; }
-#theme, #help { width: 36px; padding: 0; }
+#theme { width: 36px; padding: 0; }
 #who { font-size: 14px; }
 
 /* Screen tabs (Home, Approve frames, ...) and filter tabs (To review, Needs fix, ...): a line under the chosen one */
